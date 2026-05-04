@@ -178,6 +178,32 @@ Sys.setenv(INPUT_DATA_PATH = "/path/to/data.csv")
 data/raw/input.csv
 ```
 
+## Exposure Data Processing
+
+Exposure data were derived from the eQTLGen cis-eQTL summary statistics.
+
+Effect sizes (beta) and standard errors (SE) were computed from Z-scores using:
+
+- beta = Z / sqrt(N)
+- SE = 1 / sqrt(N)
+
+where Z is the reported Z-score and N is the sample size.
+
+Allele frequencies were obtained from the eQTLGen SNP allele frequency file:
+
+`2018-07-18_SNP_AF_for_AlleleB_combined_allele_counts_and_MAF_pos_added.txt.gz`
+
+Available at:  
+https://download.gcc.rug.nl/downloads/eqtlgen/cis-eqtl/2018-07-18_SNP_AF_for_AlleleB_combined_allele_counts_and_MAF_pos_added.txt.gz
+
+The effect allele frequency (EAF) corresponds to `AlleleB_all` and was aligned to the assessed allele used in the eQTL summary statistics.
+
+The processed exposure dataset used in this pipeline:
+
+`exposure_eqtlgen_targets18_betaSE.txt`
+
+All transformations were performed prior to analysis; no additional transformations are applied within the pipeline.
+
 ---
 
 ## Output
