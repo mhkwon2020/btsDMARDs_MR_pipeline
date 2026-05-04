@@ -100,9 +100,6 @@ project_root/
     protocol_v1.yaml
     run_full_study_v1.yaml
     failure_mode_diagnostic.yaml
-
-  runs/
-    eqtl_abstract_<timestamp>/
 ```
 
 ---
@@ -143,9 +140,55 @@ cfg <- read_protocol_bundle(
 
 ---
 
-## Output Structure
+## External Dependencies
 
-Each run generates a self-contained directory:
+This pipeline requires external resources that are not included in the repository.
+
+Please define the following environment variables:
+
+* PLINK_BIN: path to the PLINK executable
+* LD_REF_EUR: path to the European LD reference panel
+* LD_REF_EAS: path to the East Asian LD reference panel
+
+### Example (.Renviron)
+
+```
+PLINK_BIN=/usr/local/bin/plink
+LD_REF_EUR=/path/to/eur_reference
+LD_REF_EAS=/path/to/eas_reference
+```
+
+---
+
+## Data Input
+
+This repository does not include raw data.
+
+To run the pipeline:
+
+### Option 1: Use environment variable
+
+```r
+Sys.setenv(INPUT_DATA_PATH = "/path/to/data.csv")
+```
+
+### Option 2: Place file locally
+
+```
+data/raw/input.csv
+```
+
+---
+
+## Output
+
+Output files will be written to the `runs/` directory, which is created automatically during execution.
+
+Each run generates a timestamped folder containing results, logs, and reproducibility artifacts.
+
+---
+
+## Output Structure
 
 ```
 runs/
@@ -212,4 +255,3 @@ Mihye Kwon
 ## License
 
 (To be specified)
-
