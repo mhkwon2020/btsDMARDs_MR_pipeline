@@ -224,3 +224,57 @@ run_eqtl_primary_suite <- function(exp_raw,
     loo           = dplyr::bind_rows(all_loo)
   )
 }
+
+# -----------------------------------------------------------------------------
+# Entry point (execution block)
+# -----------------------------------------------------------------------------
+
+input_path <- Sys.getenv("INPUT_DATA_PATH")
+
+if (input_path == "") {
+  stop("INPUT_DATA_PATH not set. Please provide a valid data path.")
+}
+
+if (!file.exists(input_path)) {
+  stop("Input file does not exist: ", input_path)
+}
+
+message("Using input data: ", input_path)
+
+exp_raw <- read.csv(input_path)
+
+# -----------------------------------------------------------------------------
+# Define genes and outcomes (example - replace as needed)
+# -----------------------------------------------------------------------------
+
+genes <- unique(exp_raw$gene)
+
+outcomes <- list(
+  list(
+    name = "example_outcome",
+    id = "example_id",
+    ancestry = "EUR",
+    role = "primary"
+  )
+)
+
+# -----------------------------------------------------------------------------
+# Load configuration
+# -----------------------------------------------------------------------------
+
+cfg <- read_protocol_bundle(
+  "configs/protocol_v1.yaml",
+  "configs/run_full_study_v1.yaml"
+)
+
+# -----------------------------------------------------------------------------
+# Run pipeline
+# -----------------------------------------------------------------------------
+
+res <- run_eqtl_primary_suite(
+  exp_raw = exp_raw,
+  outcomes = outcomes,
+  genes = genes,
+  protocol_cfg = cfg$protocol,
+  run_cfg = cfg$run
+)
