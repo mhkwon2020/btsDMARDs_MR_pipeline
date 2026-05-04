@@ -15,6 +15,26 @@ suppressPackageStartupMessages({
 })
 
 # -----------------------------------------------------------------------------
+# Resolve external dependencies from environment variables
+# -----------------------------------------------------------------------------
+
+plink_bin <- Sys.getenv("PLINK_BIN")
+ld_ref_eur <- Sys.getenv("LD_REF_EUR")
+ld_ref_eas <- Sys.getenv("LD_REF_EAS")
+
+if (plink_bin == "") {
+  stop("PLINK_BIN is not set. Please define it in .Renviron or environment.")
+}
+
+if (ld_ref_eur == "") {
+  warning("LD_REF_EUR not set. EUR reference unavailable.")
+}
+
+if (ld_ref_eas == "") {
+  warning("LD_REF_EAS not set. EAS reference unavailable.")
+}
+
+# -----------------------------------------------------------------------------
 # Create run-specific output directory
 # -----------------------------------------------------------------------------
 run_dir <- file.path("runs", format(Sys.time(), "%Y%m%d_%H%M%S"))
