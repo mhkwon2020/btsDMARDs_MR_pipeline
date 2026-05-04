@@ -1,0 +1,1249 @@
+# failure_mode_diagnostic.yaml
+# Post-MR failure mode diagnostic module — configuration
+# Version: 1.0
+# Author: Mihye Kwon
+#
+# This file specifies the rule-based configuration for the 7-category
+# failure mode classifier used downstream of MR benchmark classification.
+module:
+  name: failure_mode_diagnostic
+  version: v2.0
+  description: >
+    Post-MR biological annotation engine for targets classified as
+    Not_supported or Non_estimable. 7-category mechanistic failure mode
+    classifier aligned with research proposal Table 1.
+  architecture: fetch_layer_plus_category_layer
+  architecture_rationale: >
+
+  design_principles:
+    - "Additive: does not modify existing classification or master_table columns"
+    - "Rule-based: confidence tiers (High/Moderate/Low), not probability values"
+    - "Multi-flag: a gene can carry flags from multiple categories simultaneously"
+    - "Protocol-driven: all thresholds and rules are configurable here"
+    - "Graceful degradation: each category runs independently; API failure does not block others"
+    - "Fetch-once, use-many: DB queries are cached and shared across categories"
+
+  categories:
+
+  output_join_key: gene
+  output_target_table: master_benchmark_table.csv
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DIAGNOSTIC TARGET SCOPE
+# ════════════════════════════════════════════════════════════════════════════════
+diagnostic_scope:
+  target_classes:
+    - Not_supported
+    - Non_estimable
+  exclude_strong: true
+  borderline_output: "borderline_case_summary.csv"
+
+# ════════════════════════════════════════════════════════════════════════════════
+#                        ┌─────────────────────┐
+#                        │   FETCH LAYER        │
+#                        │   (Data Acquisition)  │
+#                        └─────────────────────┘
+# ════════════════════════════════════════════════════════════════════════════════
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FETCH GROUP A: PIPELINE INTERNAL
+# ──────────────────────────────────────────────────────────────────────────────
+fetch_pipeline_internal:
+  description: >
+
+  target_identification:
+    source_table: master_benchmark_table.csv
+    produced_by: "R/11_reporting_tables.R → build_master_benchmark_table()"
+    filter: "class.y %in% c('Not_supported', 'Non_estimable', 'Weak_or_partial')"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - class.y             # MR evidence classification (Not_supported / Strong / etc.)
+      - tier.x
+      - target_role.x
+      - direct_ra_target
+      - drug_examples.x
+      - alignment_certainty.x
+      - eqtl_primary_beta
+      - eqtl_primary_p
+      - eqtl_primary_nsnp
+
+  # Attrition cascade
+  attrition:
+    source_table: instrument_attrition_table.csv
+    produced_by: "R/03_instrument_builder.R → build_instrument_for_gene()"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - raw_variant_count         # S0
+      - post_p_threshold_count    # S1
+      - post_clump_count          # S2
+      - post_outcome_extraction_count  # S3
+      - post_harmonisation_usable_count  # S4
+      - estimable                 # S5
+      - non_estimable_reason
+
+  # MR results
+  mr_results:
+    source_table: preferred_mr_results.csv
+    produced_by: "R/07_mr_estimation.R → preferred method selection"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - method
+      - b           # log-OR
+      - se
+      - pval
+      - nsnp
+      - OR
+      - OR_lci95
+      - OR_uci95
+
+  # Benchmark classification
+  classification:
+    source_table: benchmark_classification_table.csv
+    produced_by: "R/10_classification.R → make_benchmark_classification()"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - class
+      - support_subtype
+      - primary_nominal_support
+      - expected_direction_concordant
+      - replication_nominal_support
+      - replication_concordant_n
+
+  # Colocalisation
+  colocalisation:
+    source_table: priority_target_colocalisation_summary.csv
+    produced_by: "R/09_colocalisation.R"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - final_PP.H4
+      - coloc_support
+
+  # pQTL layer
+  pqtl_results:
+    source_table: pqtl_main_mr_results.csv
+    produced_by: "pqtl_run pipeline"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - pval
+      - b
+      - method
+      - pqtl_source_id
+
+  pqtl_estimability:
+    source_table: pqtl_instrument_attrition_table.csv
+    produced_by: "pqtl_run pipeline"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - estimable
+      - non_estimable_reason
+
+  pqtl_source_coverage:
+    source_table: pqtl_support_summary.csv
+    produced_by: "R/11_reporting_tables.R → summarise_pqtl_support()"
+    cache_key: gene
+    columns_to_cache:
+      - gene
+      - pqtl_support
+      - pqtl_estimable_any
+      - pqtl_n_sources
+      - pqtl_primary_support_any
+      - pqtl_n_sources_primary_support
+
+  # Config cross-reference
+  pqtl_panel_manifest:
+    config_file: configs/pqtl_sources.yaml
+    extract: "sources[].source_id → list of available panel IDs"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FETCH GROUP B: GENOMIC CONTEXT
+# ──────────────────────────────────────────────────────────────────────────────
+fetch_genomic_context:
+  description: >
+
+  gene_lookup:
+    database: ensembl_rest
+    endpoint: "/lookup/symbol/homo_sapiens/{GENE}"
+    input: "gene (toupper)"
+    cache_key: gene
+    cache_fields:
+      ensembl_id: "response.id"
+      chr: "response.seq_region_name"
+      start: "response.start"
+      end: "response.end"
+      strand: "response.strand"
+      description: "response.description"
+    timeout_sec: 30
+    example:
+      input: "TNF"
+      ensembl_id: "ENSG00000232810"
+      chr: "6"
+      start: 31543344
+      end: 31546113
+
+  # Step 2: Paralog detection
+  paralog_query:
+    database: ensembl_rest
+    base_url: "https://grch37.rest.ensembl.org"
+    endpoint: "/homology/id/homo_sapiens/{ENSEMBL_ID}?type=paralogues&target_species=homo_sapiens"
+    # ⚠ species path segment required: /homology/id/:species/:id (not /homology/id/:id)
+    input: "ensembl_id from gene_lookup cache"
+    cache_key: gene
+    cache_fields:
+      paralogs: "list of {id, perc_id, perc_pos, protein_id} — from target{} in response"
+      # ⚠ symbol, chr, start, end are NOT returned by homology endpoint.
+      # Chromosomal coordinates require a follow-up /lookup/id/{paralog_id} call per paralog.
+      n_paralogs_same_chr: "count of paralogs on same chromosome within 1Mb (requires coordinate lookup)"
+    known_clusters:
+      FCGR_cluster:
+        genes: [fcgr1a, fcgr2a, fcgr2b, fcgr2c, fcgr3a, fcgr3b]
+        chromosome: "1"
+        note: "FCGR cluster: CNV-rich, segmental duplication, shared instruments"
+      TNF_LTA_shared_locus:
+        genes: [tnf, lta]
+        chromosome: "6"
+        note: "MHC-proximal shared regional architecture"
+
+  # Step 3: SV/CNV data
+  sv_cnv_query:
+    primary:
+      database: gnomad
+      base_url: "https://gnomad.broadinstitute.org/api"
+      method: GraphQL
+      query: >
+        query { region(reference_genome: GRCh37, chrom: "{chr}",
+        start: {start - 500000}, stop: {end + 500000}) {
+        structural_variants(dataset: gnomad_sv_r4) {
+        variant_id type length ac an af } } }
+      #   - reference_genome: GRCh37 required on region() — not dataset
+      #   - dataset: gnomad_sv_r4 belongs on structural_variants(), not region()
+      #   - freq { total { ac an af } } → ac an af are flat fields on StructuralVariant
+      input: "[chr, start, end] from gene_lookup cache ± 500kb"
+      cache_key: gene
+      cache_fields:
+        sv_count: "count of SVs in region"
+        sv_types: "list of SV types (DEL, DUP, INV, etc.)"
+        sv_af: "allele frequency (af) per SV — flat Float field on StructuralVariant"
+    secondary:
+      database: dgv
+      method: "Pre-downloaded tab-delimited file → local filter"
+      input: "[chr, start-500kb, end+500kb]"
+      cache_key: gene
+      cache_fields:
+        dgv_variant_count: "count of DGV variants in region"
+
+  # Step 4: Mappability
+  mappability_query:
+    database: ucsc_genome_browser
+    base_url: "https://api.genome.ucsc.edu"
+    endpoint: "/getData/track?genome=hg19&track=wgEncodeCrgMapabilityAlign36mer&chrom=chr{chr}&start={start}&end={end}"
+    input: "[chr, start, end] from gene_lookup cache"
+    cache_key: gene
+    cache_fields:
+      mappability_mean: "mean mappability score (0–1) — computed as mean(value) across returned segments"
+      # ⚠ UCSC API returns per-segment array [{chrom, start, end, value}, ...], NOT a single mean.
+      # Pipeline code must compute: mean(segment$value) across all returned intervals.
+
+  # MHC boundaries (no API call — static coordinates)
+  mhc_boundaries:
+    grch37:
+      core: {chr: "6", start: 28477797, end: 33448354}
+      extended: {chr: "6", start: 25000000, end: 34000000}
+    grch38:
+      core: {chr: "6", start: 28510120, end: 33480577}
+      extended: {chr: "6", start: 25000000, end: 34000000}
+    active_build: GRCh37
+
+  # Query strategy
+  query_strategy:
+    primary_databases: [ensembl_rest, gnomad]
+    secondary_databases: [dgv, ucsc_genome_browser]
+    query_order: "gene_lookup first → paralog → SV → mappability (sequential, cached)"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FETCH GROUP C: PHARMACOLOGY
+# ──────────────────────────────────────────────────────────────────────────────
+fetch_pharmacology:
+  description: >
+
+  # Step 1: Target biology (UniProt)
+  uniprot_query:
+    database: uniprot_rest
+    base_url: "https://rest.uniprot.org"
+    endpoint: "/uniprotkb/{UNIPROT_ID}?fields=cc_subcellular_location,go_p,go_f"
+    input: "target_annotations.{gene}.uniprot_id (pre-specified in this YAML)"
+    cache_key: gene
+    cache_fields:
+      subcellular_location: "Secreted / Cell membrane / Cytoplasm / Nucleus"
+      go_molecular_function: "list of GO terms"
+      go_biological_process: "list of GO terms"
+    #   cc_subcellular_location →
+    #     response$comments[commentType=="SUBCELLULAR LOCATION"]$locations[[1]]$location$value
+    #   go_f (molecular function) →
+    #     response$uniProtKBCrossReferences[database=="GO" & startsWith(properties$GoTerm,"F:")]$id
+    #   go_p (biological process) →
+    #     response$uniProtKBCrossReferences[database=="GO" & startsWith(properties$GoTerm,"P:")]$id
+
+  # Step 2: HPA validation
+  hpa_query:
+    database: human_protein_atlas
+    base_url: "https://www.proteinatlas.org"
+    endpoint: "/{ENSEMBL_ID}.json"
+    input: "ensembl_id from fetch_genomic_context.gene_lookup cache"
+    cache_key: gene
+    cache_fields:
+      hpa_subcellular_location: "HPA Cell Atlas classification"
+      hpa_tissue_expression: "tissue expression profile"
+    #   subcellular location → response[["Subcellular main location"]]
+    #   tissue expression   → response[["RNA tissue specificity"]]
+
+  # Step 3: Drug mechanism (Open Targets — primary integrator)
+  open_targets_query:
+    database: open_targets_platform
+    base_url: "https://api.platform.opentargets.org/api/v4/graphql"
+    method: "GraphQL POST"
+    query: >
+      query { target(ensemblId: "{ENSEMBL_ID}") {
+        drugAndClinicalCandidates { rows {
+          drug { name mechanismsOfAction { rows { mechanismOfAction actionType } } }
+          maxClinicalStage
+          diseases { diseaseFromSource disease { name } } } }
+        tractability { modality label value }
+      } }
+    #   - knownDrugs → drugAndClinicalCandidates
+    #   - ClinicalTargetFromTarget row fields: phase/status/drugType/mechanismOfAction
+    #     do not exist → use maxClinicalStage, diseases { name }
+    #   - tractability: id → label
+    input: "ensembl_id from fetch_genomic_context.gene_lookup cache"
+    cache_key: gene
+    cache_fields:
+      drug_mechanisms: "list of {drug_name, actionType, mechanismOfAction, maxClinicalStage}"
+      tractability: "SM / antibody / PROTAC buckets (modality, label, value)"
+
+  # Step 4: ChEMBL validation
+  chembl_query:
+    database: chembl_rest
+    base_url: "https://www.ebi.ac.uk/chembl/api/data"
+    endpoint: "/mechanism.json?target_chembl_id={CHEMBL_TARGET_ID}"
+    input: "ChEMBL target ID (from Open Targets response or cross-reference)"
+    cache_key: gene
+    cache_fields:
+      chembl_action_types: "list of action_type values (e.g. INHIBITOR, ANTAGONIST)"
+      chembl_mechanisms: "list of mechanism_of_action strings"
+
+  # Step 5: Guide to Pharmacology
+  gtopdb_query:
+    database: guide_to_pharmacology
+    base_url: "https://www.guidetopharmacology.org/services"
+    endpoint: "/targets?name={GENE}"
+    input: "gene (toupper)"
+    cache_key: gene
+    cache_fields:
+      gtopdb_target_id: "targetId from response (required for ligand lookup)"
+      gtopdb_target_class: "target classification — actual JSON field name is 'type' (e.g. Enzyme, CatalyticReceptor)"
+    endpoint_ligands: "/targets/{GTOPDB_TARGET_ID}/interactions"
+    #   (1) GET /services/targets?name={GENE} → extract response[["targetId"]]
+    #   (2) GET /services/targets/{targetId}/interactions → get ligand interactions
+    #       fields: ligandId, targetId, type (e.g. Inhibitor), affinity, affinityParameter, etc.
+
+  # Query strategy
+  query_strategy:
+    primary_databases: [open_targets_platform, uniprot_rest]
+    secondary_databases: [chembl_rest, human_protein_atlas, guide_to_pharmacology]
+    query_order: >
+      Open Targets first (integrated data) → UniProt (validate) →
+      ChEMBL/HPA/GtoPdb (cross-validation only when primary incomplete)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FETCH GROUP D: MULTI-OMICS QTL
+# GTEx, eQTL Catalogue, GoDMC, QTLbase2, Roadmap/ENCODE, BLUEPRINT
+# ──────────────────────────────────────────────────────────────────────────────
+fetch_multiomics_qtl:
+  description: >
+
+  # Step 1: GTEx tissue-specific eQTL
+  gtex_query:
+    database: gtex_api
+    base_url: "https://gtexportal.org/api/v2"
+    endpoint: "/association/singleTissueEqtl?gencodeId={VERSIONED_GENCODE_ID}&tissueSiteDetailId={TISSUE}&datasetId=gtex_v8&page=0&itemsPerPage=200"
+    input: "versioned GENCODE v26 ID via gtexr::get_genes(gencodeVersion='v26', genomeBuild='GRCh38/hg38'); cached as gtex_gencode_id"
+    iterate_over:
+      - "Whole_Blood"
+      - "Spleen"
+      - "Cells_EBV-transformed_lymphocytes"
+      - "Cells_Cultured_fibroblasts"
+      - "Adipose_Subcutaneous"
+      - "Liver"
+    cache_key: gene
+    cache_fields:
+      gtex_eqtl_tissues: "list of tissues with significant eQTL (p < 5e-8)"
+      gtex_eqtl_count: "number of tissues with significant eQTL"
+      gtex_blood_eqtl: "TRUE/FALSE — blood-specific eQTL exists"
+    #   response$data → array of eQTL records (NOT 'singleTissueEqtl' key)
+    #   response$recordsFiltered → total hit count
+    #                   pValue, nes (NES=effect size), chromosome,
+    #                   tissueSiteDetailId, datasetId
+    reference: "doi:10.1126/science.aaz1776"
+    r_package: {name: gtexr, source: CRAN}
+
+  # Step 2: eQTL Catalogue (eQTL + sQTL)
+  # API v2: /datasets/{QTD_ID}/associations?gene_id={ENSEMBL_ID}&nlog10p=5&size=10
+  # Dataset IDs: QTD-format (old BLUEPRINT_ge / DICE_ge etc. no longer exist in v2)
+  eqtl_catalogue_query:
+    database: eqtl_catalogue
+    base_url: "https://www.ebi.ac.uk/eqtl/api/v2"
+    endpoint: "/datasets/{QTD_ID}/associations?gene_id={ENSEMBL_ID}&nlog10p=5&size=10"
+    input: "ensembl_id from fetch_genomic_context"
+    # ge (gene expression eQTL) datasets — immune cell types
+    iterate_over_ge_datasets:
+      - "QTD000021"   # BLUEPRINT monocyte ge
+      - "QTD000022"   # BLUEPRINT T-cell ge
+      - "QTD000023"   # BLUEPRINT neutrophil ge
+    # sQTL (leafcutter / txrev) datasets — confirmed in eQTL Catalogue v2
+    iterate_over_sqtl_datasets:
+      - "QTD000359"   # GTEx v8 whole blood txrev (confirmed HTTP 200, JAK1 hits)
+      - "QTD000360"   # GTEx v8 whole blood leafcutter
+      - "QTD000025"   # BLUEPRINT monocyte leafcutter
+      - "QTD000035"   # BLUEPRINT CD4T leafcutter
+      - "QTD000478"   # Schmiedel 2018 B cell leafcutter
+      - "QTD000553"   # additional immune sQTL
+    cache_key: gene
+    cache_fields:
+      eqtl_cat_eqtl_hits: "list of QTD dataset IDs with significant ge eQTL (nlog10p≥5)"
+      eqtl_cat_sqtl_hits: "TRUE/FALSE — any sQTL hit across leafcutter/txrev datasets"
+      eqtl_cat_cell_types_with_eqtl: "alias for eqtl_cat_eqtl_hits (cell type datasets)"
+    #     gene_id, molecular_trait_id, chromosome, position, ref, alt,
+    #     variant, rsid, type, pvalue, nlog10p, beta, se, maf, ac, an,
+    #     median_tpm, r2
+    reference: "doi:10.1038/s41588-021-00924-w"
+    r_package: {name: catalogueR, source: GitHub}
+
+  # Step 3: cis-mQTL — ARIES (MRInstruments package, offline, blood DNA methylation)
+  # mqtl_status 5-state: tested_positive | tested_negative | data_unavailable | api_error | no_instrument
+  aries_query:
+    method: mrinstruments_aries_local
+    pval_threshold: 1.0e-5
+    data_source: "MRInstruments::aries_mqtl (187,318 rows, HGNC uppercase)"
+    timepoints: [Birth, 7y, cord, 15y, adolescence]   # 5 developmental timepoints, blood
+    cache_key: gene
+    cache_name: aries_mqtl
+    cache_fields:
+      mqtl_status: "tested_positive | tested_negative | data_unavailable | api_error | no_instrument"
+      n_hits: "number of significant cis-mQTL hits at pval_threshold"
+      top_snp: "SNP with lowest p-value"
+      top_cpg: "CpG site with lowest p-value"
+      top_p: "minimum p-value across all hits"
+      source: "aries_mrinstruments"
+    reference: "doi:10.1038/s41467-018-03537-w"
+    r_package: {name: MRInstruments, source: GitHub}
+    godmc_validation: >
+
+  # Step 4: Chromatin state (Roadmap/ENCODE)
+  chromatin_query:
+    enabled: true
+    database: roadmap_encode
+    method: "Pre-downloaded BED files (recommended)"
+    # Download from: https://egg2.wustl.edu/roadmap/data/byFileType/
+    #   chromhmmSegmentations/ChmmModels/coreMarks/jointModel/final/
+    bed_directory: "data/roadmap_encode"
+    bed_files:
+      blood:    "E062_15_coreMarks_mnemonics.bed.gz"  # Primary mononuclear cells
+      tcell:    "E034_15_coreMarks_mnemonics.bed.gz"  # CD3+ T cells
+      bcell:    "E045_15_coreMarks_mnemonics.bed.gz"  # Primary B cells
+      monocyte: "E029_15_coreMarks_mnemonics.bed.gz"  # CD14+ monocytes
+    tss_window_bp: 2000
+    input: "[chr, start, end] from fetch_genomic_context.gene_lookup (TSS ± 2kb)"
+    cache_key: gene
+    cache_fields:
+      chromatin_state_blood: "ChromHMM state at gene TSS in blood (E062)"
+      chromatin_state_tcell: "ChromHMM state in T cells (E034)"
+      chromatin_state_bcell: "ChromHMM state in B cells (E045)"
+      chromatin_state_monocyte: "ChromHMM state in monocytes (E029)"
+    chromatin_states:
+      model: "15-state"
+      active_marks: ["TssA", "TssAFlnk", "EnhA1", "EnhA2"]
+      repressed_marks: ["ReprPC", "ReprPCWk"]
+
+  # Step 5: BLUEPRINT immune cell epigenomics
+  blueprint_query:
+    database: blueprint_epigenome
+    method: "FTP pre-download or eQTL Catalogue (BLUEPRINT datasets)"
+    note: >
+      BLUEPRINT immune cell eQTL data is already included in eQTL Catalogue
+      (dataset_id: BLUEPRINT_ge). Chromatin data via processed FTP files.
+    cell_types:
+      - "CD4_naive_Tcell"
+      - "CD8_Tcell"
+      - "CD14_monocyte"
+      - "neutrophil"
+      - "B_cell"
+    reference: "doi:10.1016/j.cell.2016.10.026"
+
+  # Step 6: QTLbase2 (manual — no API)
+  qtlbase2_reference:
+    database: qtlbase2
+    method: "Manual web query → pre-stored local lookup table"
+    note: "No programmatic API. Pre-query 18 targets and store results locally."
+    xqtl_types: [mQTL, hQTL, caQTL, sQTL]
+    reference: "doi:10.1093/nar/gkac959"
+
+  # QTLbase2 local CSV integration (actionable config)
+  qtlbase2:
+    enabled: true
+    local_csv_path: "data/qtlbase2_lookup.csv"
+    # Required columns in the CSV:
+    #   gene          — lowercase gene symbol (e.g. jak1)
+    #   qtl_type      — one of: mQTL, hQTL, caQTL, sQTL
+    #   tissue_cell_type — tissue or cell type name (e.g. Whole_Blood, CD14_monocyte)
+    #   n_hits        — integer: number of significant associations (p < 1e-5)
+    #   notes         — optional free text
+    # If the file is absent or empty the pipeline proceeds without QTLbase2 data.
+    supported_qtl_types: [mQTL, hQTL, caQTL, sQTL]
+    significance_filter:
+      # Rows with n_hits = 0 or NA are treated as absent
+      min_hits: 1
+
+  # Query strategy
+  query_strategy:
+    primary_databases: [gtex_api, eqtl_catalogue, aries_mrinstruments]
+    secondary_databases: [roadmap_encode, blueprint_epigenome, qtlbase2]
+    query_order: >
+      GTEx → eQTL Catalogue (eQTL + sQTL) → ARIES (mQTL, MRInstruments local) →
+      Roadmap/ENCODE (chromatin) → QTLbase2 (manual only)
+
+# ════════════════════════════════════════════════════════════════════════════════
+#                        ┌─────────────────────────┐
+#                        │   CATEGORY LAYER         │
+#                        │   (Diagnostic Logic)     │
+#                        └─────────────────────────┘
+# ════════════════════════════════════════════════════════════════════════════════
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch_group: pipeline_internal
+# ──────────────────────────────────────────────────────────────────────────────
+cat7_iv_absent:
+  enabled: true
+  id: iv_absent
+  execution_order: 1
+  fetch_depends: [fetch_pipeline_internal.attrition]
+  description: >
+
+  detection_rules:
+    no_eqtl_data:
+      condition: "attrition.raw_variant_count == 0"
+      flag: IV_NO_EQTL_DATA
+      confidence: High
+    no_significant_variant:
+      condition: "attrition.raw_variant_count > 0 AND attrition.post_p_threshold_count == 0"
+      flag: IV_NO_SIGNIFICANT_VARIANT
+      confidence: High
+    clumping_loss:
+      condition: "attrition.post_p_threshold_count > 0 AND attrition.post_clump_count == 0"
+      flag: IV_CLUMPING_LOSS
+      confidence: Moderate
+    outcome_mismatch:
+      condition: "attrition.post_clump_count > 0 AND attrition.post_outcome_extraction_count == 0"
+      flag: IV_OUTCOME_MISMATCH
+      confidence: Moderate
+    harmonisation_failure:
+      condition: "attrition.post_outcome_extraction_count > 0 AND attrition.post_harmonisation_usable_count == 0"
+      confidence: Moderate
+
+  output_flags: [IV_NO_EQTL_DATA, IV_NO_SIGNIFICANT_VARIANT, IV_CLUMPING_LOSS,
+
+  # Attrition stages reference (from v1)
+  attrition_stages:
+    S0: {name: target_filter, column: raw_variant_count}
+    S1: {name: p_value_threshold, column: post_p_threshold_count}
+    S2: {name: ld_clumping, column: post_clump_count}
+    S3: {name: outcome_extraction, column: post_outcome_extraction_count}
+    S4: {name: harmonisation, column: post_harmonisation_usable_count}
+    S5: {name: mr_keep_filter, column: estimable}
+
+  # Not_supported sub-classification (estimable but MR result negative)
+  not_supported_subtypes:
+    null_primary: "primary p >= threshold (effect near zero)"
+    inverse_direction: "primary p < threshold but direction opposite to expected"
+    no_replication: "primary supportive but replication all fails"
+    coloc_non_support: "MR supportive but PP.H4 < 0.8"
+
+  # Post-hoc power estimate (auxiliary)
+  power_estimate:
+    enabled: true
+    method: "Brion et al. (2013)"
+    reference: "doi:10.1093/ije/dyt179"
+    assumed_or: 1.1
+    alpha: 0.05
+    power_sufficient_threshold: 0.80
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch_group: pipeline_internal
+# ──────────────────────────────────────────────────────────────────────────────
+cat3_pqtl_panel_absent:
+  enabled: true
+  id: pqtl_panel_absent
+  execution_order: 2
+  fetch_depends: [fetch_pipeline_internal.pqtl_source_coverage,
+                  fetch_pipeline_internal.pqtl_estimability,
+                  fetch_pipeline_internal.pqtl_panel_manifest]
+  description: >
+
+  detection_rules:
+    panel_absent:
+      condition: "pqtl_source_coverage.pqtl_support == FALSE OR pqtl_source_coverage.pqtl_n_sources == 0"
+      flag: PQTL_PANEL_ABSENT
+      confidence: High
+    iv_insufficient:
+      condition: "gene IN panel AND pqtl_estimability.estimable == FALSE"
+      flag: PQTL_IV_INSUFFICIENT
+      confidence: Moderate
+    available:
+      condition: "pqtl_source_coverage.pqtl_estimable_any == TRUE"
+      confidence: null
+
+  config_reference: "configs/pqtl_sources.yaml"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch_group: genomic_context
+# ──────────────────────────────────────────────────────────────────────────────
+cat1_mhc_ld_complexity:
+  enabled: true
+  id: mhc_ld_complexity
+  execution_order: 3
+  fetch_depends: [fetch_genomic_context.gene_lookup, fetch_genomic_context.mhc_boundaries]
+  description: >
+
+  detection_rules:
+    mhc_core:
+      condition: >
+        chr == "6" AND start >= mhc_boundaries.grch37.core.start
+        AND end <= mhc_boundaries.grch37.core.end
+      flag: MHC_CORE
+      confidence: High
+    mhc_extended:
+      condition: >
+        chr == "6" AND start >= mhc_boundaries.grch37.extended.start
+        AND end <= mhc_boundaries.grch37.extended.end
+        AND NOT mhc_core
+      flag: MHC_EXTENDED
+      confidence: High
+
+  output_flags: [MHC_CORE, MHC_EXTENDED]
+  manuscript_note: >
+    Manuscript must distinguish "MHC region" vs "extended MHC (xMHC)" and
+    cite assembly-specific region definition including HLA/alt-locus handling.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch_group: genomic_context
+# ──────────────────────────────────────────────────────────────────────────────
+cat2_structural_variant:
+  enabled: true
+  id: structural_variant
+  execution_order: 4
+  fetch_depends: [fetch_genomic_context.gene_lookup,
+                  fetch_genomic_context.paralog_query,
+                  fetch_genomic_context.sv_cnv_query,
+                  fetch_genomic_context.mappability_query]
+  description: >
+
+  detection_rules:
+    structural_cluster:
+      condition: >
+        gene IN known_clusters (FCGR_cluster, TNF_LTA_shared_locus)
+        OR target_annotations.{gene}.known_locus_flags contains 'structural_cluster'
+      flag: CAT2_STRUCTURAL_CLUSTER
+      confidence: High
+      parameters:
+        min_paralogs_for_cluster: 2   # R: min_par
+    high_paralog_homology:
+      condition: "n_paralogs >= 2 AND max_paralog_identity >= 80.0"
+      flag: CAT2_HIGH_PARALOG_HOMOLOGY
+      confidence: High
+    moderate_paralog:
+      condition: "n_paralogs >= 1 AND max_paralog_identity >= 60.0 (AND not CAT2_HIGH)"
+      flag: CAT2_MODERATE_PARALOG
+      confidence: Moderate
+    high_sv_burden:
+      condition: "sv_count >= 5 in ±500kb region"
+      flag: HIGH_SV_BURDEN
+      confidence: Moderate
+      parameters:
+        region_window_kb: 500
+        high_sv_burden_threshold: 5
+    moderate_sv_burden:
+      condition: "sv_count >= 3 AND sv_count < 5 in ±500kb region"
+      flag: MODERATE_SV_BURDEN
+      confidence: Low
+    low_mappability:
+      condition: "mappability_mean < 0.5"
+      flag: LOW_MAPPABILITY
+      confidence: Moderate
+      parameters:
+        low_mappability_threshold: 0.5
+
+  output_flags: [CAT2_STRUCTURAL_CLUSTER, CAT2_HIGH_PARALOG_HOMOLOGY, CAT2_MODERATE_PARALOG,
+                  HIGH_SV_BURDEN, MODERATE_SV_BURDEN, LOW_MAPPABILITY]
+  # Primary cat2_flag: CAT2_STRUCTURAL_CLUSTER > CAT2_HIGH_PARALOG_HOMOLOGY > CAT2_MODERATE_PARALOG
+  # Supplementary (locus score only): HIGH_SV_BURDEN, MODERATE_SV_BURDEN, LOW_MAPPABILITY
+
+  # Composite scoring (cat1 + cat2 flags combined)
+  complex_locus_scoring:
+    description: >
+    weights:
+      MHC_CORE: 3
+      MHC_EXTENDED: 2
+      CAT2_STRUCTURAL_CLUSTER: 2   # R code uses this key for locus score lookup
+      STRUCTURAL_CLUSTER: 2        # fallback (legacy)
+      HIGH_SV_BURDEN: 1
+      MODERATE_SV_BURDEN: 0.5
+      LOW_MAPPABILITY: 1
+    confidence_thresholds:
+      high: 3
+      moderate: 2
+      low: 1
+
+  # SV data sources
+  sv_cnv_data_sources:
+    gnomad_sv:
+      data_source: "gnomAD v4 SV (63,046 genomes, 1,199,117 SVs)"
+      reference: "doi:10.1038/s41586-020-2287-8"
+    dgv:
+      data_source: "Database of Genomic Variants"
+      reference: "doi:10.1093/nar/gkt958"
+    ucsc_mappability:
+      track: "CRG Alignability 36bp"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch_group: pharmacology
+# ──────────────────────────────────────────────────────────────────────────────
+cat5_mechanism_mismatch:
+  enabled: true
+  id: mechanism_mismatch
+  execution_order: 5
+  fetch_depends: [fetch_pharmacology.uniprot_query,
+                  fetch_pharmacology.open_targets_query,
+                  fetch_pharmacology.chembl_query,
+                  fetch_pipeline_internal.target_identification]
+  description: >
+    transcript downregulation".
+
+  mismatch_rules:
+    enzymatic_inhibition:
+      flag: MECHANISM_MISMATCH_ENZYMATIC
+      description: >
+      drug_moa_keywords:
+        - "kinase inhibitor"
+        - "enzyme inhibitor"
+        - "ATP-competitive"
+        - "allosteric inhibitor"
+      target_biology_match:
+        subcellular_location: ["Cytoplasm", "Nucleus"]
+        go_molecular_function: ["kinase activity", "protein kinase activity",
+                                 "transferase activity"]
+      applicable_targets: [jak1, jak2, jak3, tyk2]
+      confidence_when_matched: High
+
+    secreted_neutralisation:
+      flag: MECHANISM_MISMATCH_SECRETED
+      description: >
+      drug_moa_keywords:
+        - "neutralising antibody"
+        - "ligand sequestration"
+        - "anti-cytokine"
+        - "TNF inhibitor"
+      target_biology_match:
+        subcellular_location: ["Secreted"]
+        target_role: ["ligand"]
+      applicable_targets: [tnf, lta]
+      confidence_when_matched: High
+
+    cell_depletion:
+      flag: MECHANISM_MISMATCH_DEPLETION
+      description: >
+      drug_moa_keywords:
+        - "cell depletion"
+        - "ADCC"
+        - "CDC"
+        - "anti-CD20"
+      target_biology_match:
+        subcellular_location: ["Cell membrane"]
+        target_role: ["surface_marker"]
+      applicable_targets: [ms4a1]
+      confidence_when_matched: High
+
+    costimulation_blockade:
+      flag: MECHANISM_MISMATCH_COSTIM
+      description: >
+      drug_moa_keywords:
+        - "co-stimulation blocker"
+        - "fusion protein"
+        - "CTLA4-Ig"
+      target_biology_match:
+        subcellular_location: ["Cell membrane"]
+        target_role: ["ligand", "receptor"]
+      applicable_targets: [cd80, cd86, ctla4]
+      confidence_when_matched: Moderate
+
+    receptor_blockade_complex:
+      flag: MECHANISM_MISMATCH_RECEPTOR_COMPLEX
+      description: >
+      drug_moa_keywords:
+        - "receptor blockade"
+        - "receptor antagonism"
+        - "anti-receptor antibody"
+      target_biology_match:
+        subcellular_location: ["Cell membrane", "Secreted"]
+        target_role: ["receptor"]
+      applicable_targets: [il6r, il1r1]
+      confidence_when_matched: Moderate
+
+    fc_receptor_pathway:
+      flag: MECHANISM_CONTEXT_INDIRECT
+      description: >
+      target_biology_match:
+        direct_ra_target: false   # from target_identification.direct_ra_target
+      applicable_targets: [fcgr1a, fcgr2a, fcgr2b, fcgr2c, fcgr3a, fcgr3b]
+      confidence_when_matched: Moderate
+
+    no_mismatch:
+      flag: MECHANISM_ALIGNED
+
+  output_flags: [MECHANISM_MISMATCH_ENZYMATIC, MECHANISM_MISMATCH_SECRETED,
+                  MECHANISM_MISMATCH_DEPLETION, MECHANISM_MISMATCH_COSTIM,
+                  MECHANISM_MISMATCH_RECEPTOR_COMPLEX, MECHANISM_CONTEXT_INDIRECT,
+                  MECHANISM_ALIGNED]
+
+  confidence_rules:
+    high: "Multiple DB sources confirm MOA-eQTL discordance"
+    moderate: "Single strong source or biologically plausible mismatch"
+    low: "Indirect evidence or partial annotation"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch_group: multiomics_qtl
+# ──────────────────────────────────────────────────────────────────────────────
+cat4_tissue_cell_specificity:
+  enabled: true
+  id: tissue_cell_specificity
+  execution_order: 6
+  fetch_depends: [fetch_multiomics_qtl.gtex_query,
+                  fetch_multiomics_qtl.eqtl_catalogue_query,
+                  fetch_multiomics_qtl.chromatin_query]
+  description: >
+
+  detection_rules:
+    multiomics_convergence:
+      condition: >
+        (eqtl_cat_sqtl_hits == TRUE OR qtlbase2_has_sqtl == TRUE)
+        AND pqtl_available == TRUE
+      flag: CAT4_MULTIOMICS_CONVERGENCE
+      confidence: High
+      description: >
+      source: "eQTL Catalogue sQTL (Tier B) OR QTLbase2 local CSV (Tier A) + pqtl_preferred"
+    epigenetic_context:
+      condition: >
+        (mqtl_status == 'tested_positive' OR qtlbase2_has_mqtl OR qtlbase2_has_hqtl OR qtlbase2_has_caqtl)
+        AND gtex_blood_eqtl == TRUE
+      flag: CAT4_EPIGENETIC_CONTEXT
+      confidence: Moderate
+      description: >
+      source: "ARIES mQTL (mqtl_status) OR QTLbase2 xQTL + GTEx blood eQTL"
+
+  output_flags: [CAT4_MULTIOMICS_CONVERGENCE, CAT4_EPIGENETIC_CONTEXT]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch_group: [multiomics_qtl, pipeline_internal]
+# ──────────────────────────────────────────────────────────────────────────────
+cat6_post_transcriptional:
+  enabled: true
+  id: post_transcriptional
+  execution_order: 7
+  fetch_depends: [fetch_multiomics_qtl.eqtl_catalogue_query,
+                  fetch_multiomics_qtl.aries_query,
+                  fetch_pipeline_internal.pqtl_results,
+                  fetch_pipeline_internal.classification]
+  description: >
+
+  detection_rules:
+    splicing_qtl:
+      condition: "eqtl_cat_sqtl_hits is not empty AND gene has no blood eQTL"
+      flag: SPLICING_QTL_DETECTED
+      confidence: Moderate
+      source: "eQTL Catalogue sQTL data"
+
+    alternative_qtl:
+      condition: "mqtl_status == 'tested_positive' AND gene has no blood eQTL"
+      confidence: "Moderate (QTL exists), Low (single resource)"
+      source: "ARIES mQTL (MRInstruments) + QTLbase2 xQTL"
+
+    post_transcriptional_mismatch:
+      condition: >
+        gene in target_annotations AND
+        target_annotations.{gene}.post_transcriptional_note is not empty
+      flag: POST_TRANSCRIPTIONAL_MISMATCH
+      confidence: "High (well-characterised), Moderate (inferred from GO)"
+      description: >
+      applicable_examples:
+        il6r: "ADAM10/ADAM17 ectodomain shedding → sIL-6R"
+        tnf: "TACE/ADAM17 cleavage → soluble TNF"
+        jak1: "Phosphorylation cascade (kinase activity ≠ transcript)"
+        tyk2: "Allosteric pseudokinase domain stabilisation"
+        ctla4: "AP-2 mediated constitutive endocytosis and recycling"
+
+    eqtl_pqtl_discordant:
+      condition: >
+        classification.class == 'Not_supported'
+        AND pqtl_results.pval < 0.05
+        AND direction concordant
+      flag: EQTL_PQTL_DISCORDANT
+      confidence: High
+      description: >
+
+    sqtl_discordance:
+      condition: >
+        classification.primary_nominal_support == TRUE
+        AND eqtl_cat_sqtl_hits == TRUE
+      flag: CAT6_SQTL_DISCORDANCE
+      confidence: Moderate
+      description: >
+      source: "eQTL Catalogue sQTL (eqtl_cat_sqtl_hits) + benchmark classification"
+
+                  POST_TRANSCRIPTIONAL_MISMATCH, EQTL_PQTL_DISCORDANT,
+                  CAT6_SQTL_DISCORDANCE]
+
+# ════════════════════════════════════════════════════════════════════════════════
+# ALTERNATIVE STRATEGY RECOMMENDATIONS
+# ════════════════════════════════════════════════════════════════════════════════
+alternative_strategy:
+  description: >
+
+  recommendations:
+    # Cat 7 flags
+    IV_NO_EQTL_DATA:
+      strategy: "pQTL-MR or coding variant MR (bypass eQTL entirely)"
+      instrument_source: "UKB-PPP pQTL, deCODE pQTL | missense variant"
+    IV_NO_SIGNIFICANT_VARIANT:
+      strategy: "Relaxed eQTL threshold or tissue-specific eQTL"
+      instrument_source: "GTEx tissue eQTL | eQTL Catalogue cell-type eQTL"
+
+    # Cat 3 flags
+    PQTL_PANEL_ABSENT:
+      strategy: "Seek alternative proteomic platforms or coding variant MR"
+      instrument_source: "SomaScan v4.1, Olink Explore | missense variant"
+    PQTL_IV_INSUFFICIENT:
+      strategy: "Lower pQTL threshold or use trans-pQTL with caution"
+      instrument_source: "Relaxed pQTL threshold | trans-pQTL (with Steiger filter)"
+
+    # Cat 1 flags
+    MHC_CORE:
+      strategy: "pQTL-MR or coding variant MR"
+      instrument_source: "UKB-PPP, deCODE pQTL | missense variant"
+    MHC_EXTENDED:
+      strategy: "pQTL-MR with extended LD sensitivity check"
+      instrument_source: "UKB-PPP, deCODE pQTL"
+
+    # Cat 2 flags (primary: CAT2_STRUCTURAL_CLUSTER / HIGH_PARALOG / MODERATE_PARALOG;
+    #              supplementary: HIGH_SV_BURDEN, MODERATE_SV_BURDEN, LOW_MAPPABILITY)
+    CAT2_STRUCTURAL_CLUSTER:
+      strategy: "Cluster-level analysis or pQTL-MR"
+      instrument_source: "Cluster-aggregated instrument (FCGR pattern) | UKB-PPP pQTL"
+      rationale: "Known structural cluster; individual gene IV may overlap paralogues"
+    CAT2_HIGH_PARALOG_HOMOLOGY:
+      strategy: "Paralog-aware instrument selection or pQTL-MR"
+      instrument_source: "pQTL | paralog-filtered eQTL instrument"
+      rationale: "≥2 paralogs with ≥80% identity; eQTL signal may lack gene specificity"
+    CAT2_MODERATE_PARALOG:
+      strategy: "Cross-validate IV against paralog eQTL signals"
+      instrument_source: "Paralog eQTL comparison | pQTL"
+      rationale: "≥1 paralog with ≥60% identity; moderate specificity concern"
+    HIGH_SV_BURDEN:
+      strategy: "Long-read sequencing validation or pQTL-MR"
+      instrument_source: "pQTL | long-read resolved haplotypes"
+
+    # Cat 5 flags
+    MECHANISM_MISMATCH_ENZYMATIC:
+      strategy: "Coding variant MR (missense in kinase domain) or pQTL-MR"
+      instrument_source: "Missense variant | UKB-PPP pQTL"
+    MECHANISM_MISMATCH_SECRETED:
+      strategy: "pQTL-MR (circulating protein level)"
+      instrument_source: "UKB-PPP, deCODE pQTL"
+    MECHANISM_MISMATCH_DEPLETION:
+      strategy: "Immune cell abundance MR"
+      instrument_source: "Cell-type proportion GWAS | scQTL"
+    MECHANISM_MISMATCH_COSTIM:
+      strategy: "Multi-protein interaction MR or pQTL-MR"
+      instrument_source: "CD80/CD86/CTLA4 pQTL"
+    MECHANISM_MISMATCH_RECEPTOR_COMPLEX:
+      strategy: "pQTL-MR distinguishing membrane vs soluble forms"
+      instrument_source: "UKB-PPP pQTL (soluble receptor)"
+    MECHANISM_CONTEXT_INDIRECT:
+      strategy: "Pathway-level analysis or direct-target MR only"
+      instrument_source: "Pathway-aggregated score"
+
+    # Cat 4 flags (output: CAT4_MULTIOMICS_CONVERGENCE, CAT4_EPIGENETIC_CONTEXT)
+    CAT4_MULTIOMICS_CONVERGENCE:
+      strategy: "Triangulate eQTL-MR with sQTL-MR and pQTL-MR"
+      instrument_source: "GTEx/eQTL Catalogue sQTL | UKB-PPP pQTL"
+      rationale: "sQTL + pQTL convergence suggests causal variant acts via splicing and protein level"
+    CAT4_EPIGENETIC_CONTEXT:
+      strategy: "Methylation QTL MR (mQTL-MR)"
+      instrument_source: "GoDMC mQTL | QTLbase2"
+      rationale: "eQTL present but mQTL co-localises — epigenetic regulation may mediate effect"
+
+    # Cat 6 flags
+    SPLICING_QTL_DETECTED:
+      strategy: "Splicing QTL MR (sQTL-MR)"
+      instrument_source: "eQTL Catalogue sQTL | GTEx sQTL"
+      strategy: "xQTL-MR (mQTL, hQTL, caQTL)"
+      instrument_source: "GoDMC, QTLbase2, BLUEPRINT"
+    POST_TRANSCRIPTIONAL_MISMATCH:
+      strategy: "pQTL-MR or functional variant MR"
+      instrument_source: "UKB-PPP pQTL | missense/regulatory variant"
+    EQTL_PQTL_DISCORDANT:
+      strategy: "Prioritise pQTL-MR result; investigate post-transcriptional mechanism"
+      instrument_source: "pQTL instrument (already available)"
+    CAT6_SQTL_DISCORDANCE:
+      instrument_source: "eQTL Catalogue sQTL | GTEx sQTL | QTLbase2 sQTL"
+
+# ════════════════════════════════════════════════════════════════════════════════
+# OUTPUT CONFIGURATION
+# ════════════════════════════════════════════════════════════════════════════════
+output:
+  files:
+    composite_table: "fail_diagnostic_composite.csv"
+    cat7_detail: "cat7_iv_absent_detail.csv"
+    cat3_detail: "cat3_pqtl_panel_detail.csv"
+    cat1_detail: "cat1_mhc_ld_detail.csv"
+    cat2_detail: "cat2_paralog_ld_detail.csv"
+    cat5_detail: "cat5_mechanism_mismatch_detail.csv"
+    cat4_detail: "cat4_multiomics_detail.csv"
+    cat6_detail: "cat6_post_transcriptional_detail.csv"
+    api_call_log: "fail_mode_annotation_log.csv"
+
+  composite_table_columns:
+    - gene
+    - class
+    - cat7_confidence
+    - cat3_confidence
+    - cat1_flag         # MHC/LD
+    - cat1_confidence
+    - cat2_confidence
+    - cat2_locus_score  # composite locus complexity score
+    - cat5_confidence
+    - cat4_confidence
+    - cat6_confidence
+    - n_categories_flagged
+    - recommended_strategy
+    - annotation_timestamp
+
+  write_category_details: true
+  write_api_log: true
+  narrative_language: en
+
+# ════════════════════════════════════════════════════════════════════════════════
+# VARIABLE TRANSFORMATIONS
+# ════════════════════════════════════════════════════════════════════════════════
+variable_transformations:
+  gene_symbol_case:
+    pipeline_format: "lowercase (tnf, jak1, il6r)"
+    ensembl_format: "UPPERCASE (TNF, JAK1, IL6R)"
+    open_targets_format: "Ensembl ID (ENSG00000232810)"
+    uniprot_format: "UniProt accession (P01375) — from target_annotations"
+    transformation: "toupper(gene) for Ensembl; target_annotations lookup for UniProt"
+
+  chromosome_format:
+    pipeline_format: "numeric string ('6', '1')"
+    ucsc_format: "chr-prefixed ('chr6', 'chr1')"
+    gnomad_format: "numeric string ('6', '1')"
+    transformation: "paste0('chr', chr) for UCSC only"
+
+  genome_build:
+    pipeline_build: "GRCh37 (hg19)"
+    ensembl_default: "GRCh38 — use https://grch37.rest.ensembl.org for GRCh37"
+    gtex_build: "GRCh38 — gene-level queries are build-agnostic"
+    gnomad_build: "both (v2=GRCh37, v4=GRCh38)"
+    ucsc_build: "hg19 for GRCh37"
+    note: >
+      ⚠ CRITICAL: Our pipeline uses GRCh37. Ensembl REST default is GRCh38.
+      MUST use grch37.rest.ensembl.org OR liftover coordinates.
+
+  ensembl_id_versioning:
+    pipeline: "unversioned (ENSG00000232810)"
+    gtex: "versioned (ENSG00000232810.3)"
+    eqtl_catalogue: "unversioned"
+    transformation: "sub('\\.[0-9]+$', '', id) to strip; Ensembl lookup to add"
+
+# ════════════════════════════════════════════════════════════════════════════════
+# API GLOBAL SETTINGS
+# ════════════════════════════════════════════════════════════════════════════════
+api_global:
+  cache:
+    enabled: true
+    directory: "cache/failmode_api/"
+    expiry_days: 30
+    note: "Fetch layer results are cached here. All categories share this cache."
+  rate_limiting:
+    default_delay_ms: 200
+    ensembl_delay_ms: 350
+    open_targets_delay_ms: 100
+    eqtl_catalogue_delay_ms: 500
+  retry:
+    max_retries: 3
+    retry_delay_sec: 5
+    retryable_http_codes: [429, 500, 502, 503, 504]
+  http:
+    timeout_sec: 30
+    user_agent: "btsDMARDs_MR_pipeline/v2.0 (failure_mode_diagnostic)"
+    accept: "application/json"
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DATABASE ACCESS REQUIREMENTS
+# ════════════════════════════════════════════════════════════════════════════════
+database_access_requirements:
+  description: >
+    Complete access specification for every external database.
+
+  summary:
+    ensembl_rest:    {auth: none, rate_limit: "15 req/sec", r_pkg: biomaRt}
+    gnomad:          {auth: none, rate_limit: "undocumented", r_pkg: ghql}
+    dgv:             {auth: none, rate_limit: null, r_pkg: "biomaRt (BioMart)"}
+    ucsc:            {auth: none, rate_limit: "undocumented", r_pkg: rtracklayer}
+    uniprot_rest:    {auth: none, rate_limit: "undocumented", r_pkg: UniProt.ws}
+    open_targets:    {auth: none, rate_limit: "undocumented", r_pkg: ghql}
+    chembl_rest:     {auth: none, rate_limit: "undocumented", r_pkg: webchem}
+    human_protein_atlas: {auth: none, rate_limit: "undocumented", r_pkg: hpar}
+    guide_to_pharmacology: {auth: none, rate_limit: "undocumented", r_pkg: null}
+    gtex_api:        {auth: none, rate_limit: "undocumented", r_pkg: gtexr}
+    eqtl_catalogue:  {auth: none, rate_limit: "informal (IP block risk)", r_pkg: catalogueR}
+    aries_mrinstruments: {auth: none, rate_limit: "none (local R package)", r_pkg: MRInstruments}
+    godmc:           {auth: none, rate_limit: "undocumented", r_pkg: null, status: "HTTP 503 since 2026-04 — retry via scripts/retry_mqtl_godmc.R"}
+    roadmap_encode:  {auth: none, rate_limit: "10 req/sec", r_pkg: rtracklayer}
+    blueprint:       {auth: "managed (processed=open)", rate_limit: null, r_pkg: null}
+    qtlbase2:        {auth: none, rate_limit: null, r_pkg: "null (no API)"}
+
+  full_reference: "configs/failure_mode_diagnostic_v1.yaml → database_access_requirements"
+
+# ════════════════════════════════════════════════════════════════════════════════
+# PRE-SPECIFIED TARGET ANNOTATIONS
+# ════════════════════════════════════════════════════════════════════════════════
+target_annotations:
+  description: >
+    Pre-curated annotations for 18 btsDMARDs targets.
+
+  tnf:
+    uniprot_id: P01375
+    subcellular_location: Secreted
+    go_molecular_function: "cytokine activity"
+    drug_modality: monoclonal_antibody
+    drug_action_type: "neutralising antibody / ligand sequestration"
+    expected_mismatch: MECHANISM_MISMATCH_SECRETED
+    known_locus_flags: [MHC_EXTENDED]
+    pqtl_panel_status: available
+    post_transcriptional_note: "TACE/ADAM17 cleaves pro-TNF → soluble TNF"
+
+  lta:
+    uniprot_id: P01374
+    subcellular_location: Secreted
+    go_molecular_function: "cytokine activity"
+    drug_modality: fusion_protein
+    drug_action_type: "pathway-related cytokine neutralisation"
+    expected_mismatch: MECHANISM_MISMATCH_SECRETED
+    known_locus_flags: [MHC_EXTENDED]
+    pqtl_panel_status: available
+    post_transcriptional_note: "Shares TNF pathway; ADAM17 context"
+
+  fcgr1a:
+    uniprot_id: P12314
+    subcellular_location: Cell membrane
+    go_molecular_function: "IgG receptor activity"
+    drug_modality: indirect_pathway
+    drug_action_type: "Fc receptor pathway (not direct target)"
+    expected_mismatch: MECHANISM_CONTEXT_INDIRECT
+    known_locus_flags: [STRUCTURAL_CLUSTER]
+    pqtl_panel_status: check_required
+    post_transcriptional_note: "FCGR cluster: high sequence homology, assay cross-reactivity"
+
+  fcgr2a: {uniprot_id: P12318, subcellular_location: Cell membrane, expected_mismatch: MECHANISM_CONTEXT_INDIRECT, known_locus_flags: [STRUCTURAL_CLUSTER], pqtl_panel_status: check_required}
+  fcgr2b: {uniprot_id: P31994, subcellular_location: Cell membrane, expected_mismatch: MECHANISM_CONTEXT_INDIRECT, known_locus_flags: [STRUCTURAL_CLUSTER], pqtl_panel_status: check_required}
+  fcgr2c: {uniprot_id: P31995, subcellular_location: Cell membrane, expected_mismatch: MECHANISM_CONTEXT_INDIRECT, known_locus_flags: [STRUCTURAL_CLUSTER], pqtl_panel_status: check_required}
+  fcgr3a: {uniprot_id: P08637, subcellular_location: Cell membrane, expected_mismatch: MECHANISM_CONTEXT_INDIRECT, known_locus_flags: [STRUCTURAL_CLUSTER], pqtl_panel_status: check_required}
+  fcgr3b: {uniprot_id: O75015, subcellular_location: Cell membrane, expected_mismatch: MECHANISM_CONTEXT_INDIRECT, known_locus_flags: [STRUCTURAL_CLUSTER], pqtl_panel_status: check_required}
+
+  cd80:
+    uniprot_id: P33681
+    subcellular_location: Cell membrane
+    go_molecular_function: "receptor ligand activity"
+    drug_modality: fusion_protein
+    drug_action_type: "co-stimulation blockade (CTLA4-Ig)"
+    expected_mismatch: MECHANISM_MISMATCH_COSTIM
+    pqtl_panel_status: available
+    post_transcriptional_note: "Protein-protein interaction; expression ≠ interaction affinity"
+
+  cd86: {uniprot_id: P42081, subcellular_location: Cell membrane, expected_mismatch: MECHANISM_MISMATCH_COSTIM, pqtl_panel_status: available}
+
+  ctla4:
+    uniprot_id: P16410
+    subcellular_location: Cell membrane
+    go_molecular_function: "signaling receptor activity"
+    drug_modality: fusion_protein
+    drug_action_type: "CTLA4-Ig fusion protein"
+    expected_mismatch: MECHANISM_MISMATCH_COSTIM
+    pqtl_panel_status: available
+    post_transcriptional_note: "AP-2 mediated constitutive endocytosis/recycling"
+
+  ms4a1:
+    uniprot_id: P11836
+    subcellular_location: Cell membrane
+    drug_modality: monoclonal_antibody
+    drug_action_type: "B-cell depletion (anti-CD20 ADCC/CDC)"
+    expected_mismatch: MECHANISM_MISMATCH_DEPLETION
+    pqtl_panel_status: available
+    post_transcriptional_note: "Rituximab depletes B cells; eQTL ≠ cell count"
+
+  il6r:
+    uniprot_id: P08887
+    subcellular_location: [Cell membrane, Secreted]
+    go_molecular_function: "interleukin-6 receptor activity"
+    drug_modality: monoclonal_antibody
+    drug_action_type: "IL-6 receptor blockade"
+    expected_mismatch: MECHANISM_MISMATCH_RECEPTOR_COMPLEX
+    pqtl_panel_status: available
+    post_transcriptional_note: "ADAM10/ADAM17 shedding → sIL-6R; classical vs trans-signalling"
+
+  il1r1:
+    uniprot_id: P14778
+    subcellular_location: Cell membrane
+    go_molecular_function: "interleukin-1 receptor activity"
+    drug_modality: recombinant_protein
+    drug_action_type: "IL-1 receptor antagonism (anakinra)"
+    expected_mismatch: MECHANISM_MISMATCH_RECEPTOR_COMPLEX
+    pqtl_panel_status: available
+    post_transcriptional_note: "sIL1R1 + IL-1RAcP regulate signalling post-translationally"
+
+  jak1:
+    uniprot_id: P23458
+    subcellular_location: Cytoplasm
+    go_molecular_function: "protein tyrosine kinase activity"
+    drug_modality: small_molecule
+    drug_action_type: "JAK kinase inhibitor (ATP-competitive)"
+    expected_mismatch: MECHANISM_MISMATCH_ENZYMATIC
+    pqtl_panel_status: available
+    post_transcriptional_note: "Kinase ACTIVITY (phosphorylation) ≠ transcript abundance"
+
+  jak2: {uniprot_id: O60674, subcellular_location: Cytoplasm, expected_mismatch: MECHANISM_MISMATCH_ENZYMATIC, pqtl_panel_status: available, post_transcriptional_note: "Same as JAK1"}
+  jak3: {uniprot_id: P52333, subcellular_location: Cytoplasm, expected_mismatch: MECHANISM_MISMATCH_ENZYMATIC, pqtl_panel_status: available, post_transcriptional_note: "Same as JAK1"}
+
+  tyk2:
+    uniprot_id: P29597
+    subcellular_location: Cytoplasm
+    go_molecular_function: "protein tyrosine kinase activity"
+    drug_modality: small_molecule
+    drug_action_type: "TYK2 kinase inhibitor (allosteric)"
+    expected_mismatch: MECHANISM_MISMATCH_ENZYMATIC
+    pqtl_panel_status: available
+    post_transcriptional_note: "Deucravacitinib binds pseudokinase domain (allosteric conformational control)"
