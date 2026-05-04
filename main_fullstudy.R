@@ -15,7 +15,7 @@ suppressPackageStartupMessages({
 })
 
 # -----------------------------------------------------------------------------
-# Resolve external dependencies from environment variables
+# Resolve external dependencies
 # -----------------------------------------------------------------------------
 
 plink_bin <- Sys.getenv("PLINK_BIN")
@@ -25,14 +25,36 @@ ld_ref_eas <- Sys.getenv("LD_REF_EAS")
 if (plink_bin == "") {
   stop("PLINK_BIN is not set. Please define it in .Renviron or environment.")
 }
-
-if (ld_ref_eur == "") {
-  warning("LD_REF_EUR not set. EUR reference unavailable.")
+if (!file.exists(plink_bin)) {
+  stop("PLINK_BIN path does not exist: ", plink_bin)
 }
 
-if (ld_ref_eas == "") {
-  warning("LD_REF_EAS not set. EAS reference unavailable.")
+if (ld_ref_eur != "" && !dir.exists(ld_ref_eur)) {
+  warning("LD_REF_EUR path not found: ", ld_ref_eur)
 }
+
+if (ld_ref_eas != "" && !dir.exists(ld_ref_eas)) {
+  warning("LD_REF_EAS path not found: ", ld_ref_eas)
+}
+
+# -----------------------------------------------------------------------------
+# Create run-specific output directory
+# -----------------------------------------------------------------------------
+
+run_dir <- file.path("runs", format(Sys.time(), "%Y%m%d_%H%M%S"))
+dir.create(run_dir, recursive = TRUE)
+
+message("Output directory: ", run_dir)
+
+# Optional: attach to config
+options(run_dir = run_dir)
+
+# Save reproducibility info
+writeLines(capture.output(sessionInfo()),
+           file.path(run_dir, "session_info.txt"))
+
+writeLines(as.character(Sys.time()),
+           file.path(run_dir, "run_timestamp.txt"))
 
 # -----------------------------------------------------------------------------
 # Create run-specific output directory
