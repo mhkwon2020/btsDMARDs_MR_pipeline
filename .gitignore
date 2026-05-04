@@ -1,0 +1,21 @@
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# OS
+.DS_Store
+
+# Output (VERY IMPORTANT)
+runs/
+results/
+cache/
+logs/
+
+# Temporary
+*.tmp
+*.log
+
+# IDE
+.vscode/
