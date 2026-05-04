@@ -100,6 +100,8 @@ project_root/
     protocol_v1.yaml
     run_full_study_v1.yaml
     failure_mode_diagnostic.yaml
+    targets.yaml
+    pqtl_sources.yaml
 ```
 
 ---
