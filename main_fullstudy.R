@@ -57,15 +57,6 @@ writeLines(as.character(Sys.time()),
            file.path(run_dir, "run_timestamp.txt"))
 
 # -----------------------------------------------------------------------------
-# Create run-specific output directory
-# -----------------------------------------------------------------------------
-run_dir <- file.path("runs", format(Sys.time(), "%Y%m%d_%H%M%S"))
-
-dir.create(run_dir, recursive = TRUE)
-
-message("Output directory: ", run_dir)
-
-# -----------------------------------------------------------------------------
 # Core modules
 # -----------------------------------------------------------------------------
 source("R/00_utils.R")
