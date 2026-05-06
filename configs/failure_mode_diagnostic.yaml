@@ -555,7 +555,7 @@ cat7_iv_absent:
       condition: "attrition.post_outcome_extraction_count > 0 AND attrition.post_harmonisation_usable_count == 0"
       confidence: Moderate
 
-  output_flags: [IV_NO_EQTL_DATA, IV_NO_SIGNIFICANT_VARIANT, IV_CLUMPING_LOSS,
+  output_flags: [IV_NO_EQTL_DATA, IV_NO_SIGNIFICANT_VARIANT, IV_CLUMPING_LOSS, IV_OUTCOME_MISMATCH, IV_HARMONISATION_FAILURE]
 
   # Attrition stages reference (from v1)
   attrition_stages:
@@ -913,8 +913,7 @@ cat6_post_transcriptional:
       description: >
       source: "eQTL Catalogue sQTL (eqtl_cat_sqtl_hits) + benchmark classification"
 
-                  POST_TRANSCRIPTIONAL_MISMATCH, EQTL_PQTL_DISCORDANT,
-                  CAT6_SQTL_DISCORDANCE]
+  output_flags: [SPLICING_QTL_DETECTED, POST_TRANSCRIPTIONAL_MISMATCH, EQTL_PQTL_DISCORDANT, CAT6_SQTL_DISCORDANCE]
 
 # ════════════════════════════════════════════════════════════════════════════════
 # ALTERNATIVE STRATEGY RECOMMENDATIONS
