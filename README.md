@@ -209,6 +209,8 @@ All transformations were performed prior to analysis; no additional transformati
 
 External datasets are not distributed with this repository due to licensing restrictions. Users must obtain the datasets independently and configure paths via environment variables.
 
+Processed pQTL datasets and analysis scripts are available at the GitHub repository. A Zenodo DOI archive will be provided upon publication.
+
 ---
 
 ## Output
