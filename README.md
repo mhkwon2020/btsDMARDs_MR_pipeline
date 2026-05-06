@@ -206,6 +206,13 @@ The processed exposure dataset used in this pipeline:
 
 All transformations were performed prior to analysis; no additional transformations are applied within the pipeline.
 
+
+---
+
+## Data Availability
+
+External datasets are not distributed with this repository due to licensing restrictions. Users must obtain the datasets independently and configure paths via environment variables.
+
 ---
 
 ## Output
