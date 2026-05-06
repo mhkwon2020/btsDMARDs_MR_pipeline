@@ -142,23 +142,19 @@ cfg <- read_protocol_bundle(
 
 ---
 
-## External Dependencies
+## External dependencies
 
-This pipeline requires external resources that are not included in the repository.
+This pipeline requires:
 
-Please define the following environment variables:
+- PLINK 1.9
+- 1000 Genomes reference panels (EUR/EAS)
 
-* PLINK_BIN: path to the PLINK executable
-* LD_REF_EUR: path to the European LD reference panel
-* LD_REF_EAS: path to the East Asian LD reference panel
+Set environment variables:
 
-### Example (.Renviron)
-
-```
-PLINK_BIN=/usr/local/bin/plink
-LD_REF_EUR=/path/to/eur_reference
-LD_REF_EAS=/path/to/eas_reference
-```
+- PLINK_BIN
+- LD_REF_EUR
+- LD_REF_EAS
+- INPUT_DATA_PATH
 
 ---
 
