@@ -9,6 +9,11 @@
 
 # Output (VERY IMPORTANT)
 runs/
+.Rhistory
+.RData
+.Rproj.user/
+.Renviron
+*.log
 results/
 cache/
 logs/
