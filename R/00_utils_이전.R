@@ -13,20 +13,15 @@ suppressPackageStartupMessages({
 }
 
 log_message <- function(log_file, ...) {
-  txt <- sprintf(
-    "[%s] %s\n",
-    format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-    glue::glue(..., .envir = parent.frame())
+  cat(
+    sprintf(
+      "[%s] %s\n",
+      format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+      glue(..., .envir = parent.frame())
+    ),
+    file = log_file,
+    append = TRUE
   )
-
-  if (!is.null(log_file) && is.character(log_file) && nzchar(log_file)) {
-    tryCatch(
-      cat(txt, file = log_file, append = TRUE),
-      error = function(e) cat(txt)
-    )
-  } else {
-    cat(txt)
-  }
 }
 
 write_yaml_snapshot <- function(obj, path) {
@@ -76,28 +71,4 @@ pick_preferred_result <- function(df, method_order) {
   df$.method_rank[is.na(df$.method_rank)] <- 999L
   df <- df[order(df$.method_rank, df$pval), , drop = FALSE]
   df[1, setdiff(names(df), ".method_rank"), drop = FALSE]
-}
-
-# Expand ${VAR_NAME} placeholders in a string using environment variables.
-# Used for resolving data file paths in YAML config files portably across systems.
-expand_env_path <- function(path) {
-  if (is.null(path) || !is.character(path) || !nzchar(trimws(path))) return(path)
-  pattern <- "\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}"
-  result <- path
-  repeat {
-    m <- regexpr(pattern, result, perl = TRUE)
-    if (m == -1L) break
-    full_match <- regmatches(result, m)
-    var_name <- sub("^\\$\\{(.+)\\}$", "\\1", full_match)
-    val <- Sys.getenv(var_name, unset = "")
-    if (!nzchar(val)) {
-      warning(
-        "Environment variable '", var_name, "' is not set. ",
-        "Path resolution will be incomplete: ", result,
-        call. = FALSE
-      )
-    }
-    result <- sub(pattern, val, result, perl = TRUE)
-  }
-  normalizePath(result, winslash = "/", mustWork = FALSE)
 }

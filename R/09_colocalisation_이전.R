@@ -60,19 +60,10 @@ get_coloc_outcome_objects <- function(run_cfg, outcomes) {
 }
 
 safe_coloc_log <- function(file = NULL, message) {
-    txt <- sprintf("[%s] %s\n",
-                   format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-                   message)
-
-    if (!is.null(file) && is.character(file) && nzchar(file)) {
-        tryCatch(
-            cat(txt, file = file, append = TRUE),
-            error = function(e) cat(txt)
-        )
-    } else {
-        cat(txt)
+    if (is.null(file) || !nzchar(file)) return(invisible(NULL))
+    if (exists("log_message", mode = "function", inherits = TRUE)) {
+        log_message(file, message)
     }
-
     invisible(NULL)
 }
 

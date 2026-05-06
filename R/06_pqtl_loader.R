@@ -123,9 +123,20 @@ standardize_pqtl_source <- function(raw_df, source_cfg, target_genes = NULL) {
 load_single_pqtl_source <- function(source_cfg, target_genes = NULL) {
   if (!isTRUE(source_cfg$enabled)) return(NULL)
 
+  # Resolve ${VAR} placeholders in the file path (see 00_utils.R::expand_env_path)
+  file_path <- expand_env_path(source_cfg$file)
+
+  if (!file.exists(file_path)) {
+    stop(
+      "pQTL source file not found for '", source_cfg$source_name, "': ", file_path,
+      "\nCheck that PQTL_DATA_DIR is set correctly in your .Renviron or environment.",
+      call. = FALSE
+    )
+  }
+
   delim <- source_cfg$delimiter %||% "\t"
   raw_df <- utils::read.table(
-    source_cfg$file,
+    file_path,
     header = TRUE,
     sep = delim,
     stringsAsFactors = FALSE,

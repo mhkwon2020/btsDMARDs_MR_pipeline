@@ -1,0 +1,528 @@
+project:
+  name: btsDMARDs_MR
+  protocol_version: v1.0
+  study_identity: benchmark_validation
+  description: 'Benchmark/validation study of drug-target Mendelian randomisation
+    in rheumatoid arthritis using prespecified therapeutic targets as positive controls.
+
+    '
+design:
+  objective_primary: 'To benchmark the reproducibility and interpretability of drug-target
+    MR in RA using prespecified therapeutic targets as positive controls.
+
+    '
+  objective_secondary:
+  - Evaluate heterogeneity by serostatus
+  - Assess transportability across EUR and EAS datasets
+  - Identify non-estimable targets and classify attrition points
+  - Perform orthogonal validation using cis-pQTL instruments
+  - Assess locus-level support using colocalisation
+targets:
+  prespecified: true
+  allow_dynamic_target_addition: false
+  metadata_file: configs/targets.yaml
+  expected_target_count: 18
+  gene_list:
+  - tnf
+  - lta
+  - fcgr1a
+  - fcgr2a
+  - fcgr2b
+  - fcgr2c
+  - fcgr3a
+  - fcgr3b
+  - cd80
+  - cd86
+  - ctla4
+  - ms4a1
+  - il6r
+  - il1r1
+  - jak1
+  - jak2
+  - jak3
+  - tyk2
+cluster_groups:
+- name: FCGR_cluster_1q23
+  genes:
+  - fcgr1a
+  - fcgr2a
+  - fcgr2b
+  - fcgr2c
+  - fcgr3a
+  - fcgr3b
+  chromosome: 1
+  ld_check_reference: 1000G_phase3_EUR
+  ld_check_window_kb: 1000
+  interpretation_rule: 'These genes reside in an overlapping cis region and may share
+    instruments or correlated instruments. If instruments are identical or show substantial
+    LD overlap across genes, results should be interpreted primarily as cluster-level
+    evidence rather than as six fully independent gene-specific benchmark signals.
+
+    '
+  operational_rule:
+    check_shared_snps: true
+    check_ld_overlap: true
+    ld_overlap_r2_threshold: 0.3
+    cluster_level_reporting_if_overlap: true
+  reporting_priority:
+    main_text: cluster_level
+    supplement: gene_level_sensitivity
+  reporting_rule_note: >
+    FCGR cluster results should be reported primarily at cluster level in the main
+    text, with gene-level results retained as sensitivity/appendix outputs.
+locus_specific_rules:
+- name: TNF_LTA_shared_locus
+  genes:
+  - tnf
+  - lta
+  locus_context: MHC-proximal / shared regional architecture
+  interpretation_rule: 'TNF and LTA are biologically related targets located in a
+    closely linked shared locus. Their cis instruments may overlap or capture correlated
+    regulatory structure. Therefore, gene-specific MR estimates should be interpreted
+    with shared-locus caution.
+
+    '
+  operational_rule:
+    check_shared_snps: true
+    check_ld_overlap: true
+    ld_overlap_r2_threshold: 0.3
+    perform_mhc_proximal_sensitivity_note: true
+    tnfa_multi_assay_primary_selection_priority:
+    - largest_sample_size
+    - most_stable_instrument_count
+    - predeclared_panel_priority
+  reporting_note: 'TNF and LTA results may represent shared-locus biology rather than
+    cleanly separable target-specific perturbation effects.
+
+    '
+  reporting_priority:
+    main_text: gene_level_with_shared_locus_caution
+    supplement: gene_level_sensitivity
+  caution_propagation:
+    treat_distinct_signals_likely_as_caution_note: true
+    treat_susie_failure_as_caution_note: true
+proxy_layers:
+  primary:
+    enabled: true
+    type: cis_eQTL
+    role: primary_benchmark
+    exposure_file: "${INPUT_DATA_PATH}"   # resolved at runtime from env var INPUT_DATA_PATH
+    source_name: eQTLGen Consortium
+    source_publication: Nat Genet 2021; large-scale cis/trans eQTL resource
+    source_doi: 10.1038/s41588-021-00913-z
+    sample_size: 31684
+    tissue_context: blood-derived expression
+    ancestry_context: predominantly European
+    cis_definition_note: 'Current exposure input file is treated as a pre-derived
+      cis-eQTL target panel. Explicit p-threshold filtering is still applied within
+      this protocol before clumping.
+
+      '
+  secondary:
+    enabled: true
+    type: cis_pQTL
+    role: orthogonal_validation
+    candidate_sources:
+    - source_name: UK Biobank Pharma Proteomics Project
+      source_publication: Nature 2023
+      source_doi: 10.1038/s41586-023-06592-6
+      sample_size: 54219
+      protein_count: 2923
+      assay: Olink Explore 3072 PEA
+    - source_name: deCODE plasma proteome
+      source_publication: Nat Genet 2021
+      source_doi: 10.1038/s41588-021-00978-w
+      sample_size: 35559
+      assay: 4907 aptamers
+    - source_name: INTERVAL plasma proteome
+      source_publication: Nature 2018
+      source_doi: 10.1038/s41586-018-0175-2
+      protein_count: 1478
+      cohort_context: healthy blood donors
+    note: 'Secondary validation layer. Presence in protocol does not imply same-day
+      execution.
+
+      '
+proxy_layer_interpretation:
+  eqtl_pqtl_discordance_rule: "eQTL and pQTL are evaluated as distinct proxy layers.\
+    \ Discordance between the two does not automatically downgrade a target to negative\
+    \ evidence. Discordance should first be interpreted in light of tissue specificity,\
+    \ transcript-protein decoupling, assay architecture, and target-perturbation alignment.\
+    \     \n"
+instrument_selection:
+  cis_window:
+    mode: use_input_exposure_definition
+  p_threshold:
+    primary: 5.0e-08
+    sensitivity:
+      enabled: true
+      thresholds:
+      - 1.0e-06
+      - 1.0e-05
+    apply_explicit_filter_before_clumping: true
+    also_pass_to_clumping_function: true
+  clumping:
+    enabled: true
+    method: TwoSampleMR::clump_data
+    software_backend: OpenGWAS API / PLINK clumping
+    r2: 0.001
+    kb: 10000
+    ancestry_matched: true
+  ld_reference:
+    EUR:
+      panel: 1000G_phase3_EUR
+    EAS:
+      panel: 1000G_phase3_EAS
+    EUR_primary: 1000G_phase3_EUR
+    EAS_bbj: 1000G_phase3_EAS
+    note: 'EUR instruments are clumped using 1000G Phase 3 EUR LD. EAS outcome analyses
+      use EUR-clumped instruments, and this cross-ancestry LD mismatch is acknowledged
+      as a limitation.
+
+      '
+  minimum_instrument_rules:
+    allow_single_snp: true
+    allow_two_snp_ivw: true
+    require_three_snp_for_egger: true
+    require_three_snp_for_leave_one_out: true
+    two_snp_reporting_note: 2-SNP IVW; interpret with caution.
+outcomes:
+  primary:
+  - name: RA_EUR_PRIMARY
+    source: opengwas
+    id: ebi-a-GCST90018910
+    ancestry: EUR
+    phenotype: rheumatoid arthritis
+    original_paper_doi: https://doi.org/10.1038/s41588-021-00931-x
+    n_cases: 8255
+    n_controls: 409001
+    access_date: '2026-03-18'
+    build: HG19/GRCh37
+    metadata_note: 'Primary outcome metadata must be pinned to the exact OpenGWAS
+      dataset page and source publication before final manuscript lock.
+
+      '
+  replication:
+  - name: RA_EUR_REP1_FinnGen
+    source: opengwas
+    id: finn-b-M13_RHEUMA
+    ancestry: EUR
+    phenotype: rheumatoid arthritis
+    finngen_release: TO_BE_VERIFIED
+    original_paper_doi: https://doi.org/10.1038/s41586-022-05473-8
+    n_cases: 6236
+    n_controls: 147221
+    access_date: '2026-03-18'
+    build: HG19/GRCh37
+    metadata_note: 'FinnGen release and source metadata must be pinned to the exact
+      OpenGWAS dataset page.
+
+      '
+  secondary:
+  - name: RA_EUR_SEROPOS
+    source: opengwas
+    id: finn-b-RHEUMA_SEROPOS
+    ancestry: EUR
+    phenotype: seropositive rheumatoid arthritis
+    finngen_release: TO_BE_VERIFIED
+    original_paper_doi: https://doi.org/10.1038/s41586-022-05473-8
+    n_cases: 12227
+    n_controls: 165203
+    access_date: '2026-03-18'
+  - name: RA_EUR_SERONEG
+    source: opengwas
+    id: finn-b-RHEUMA_SERONEG
+    ancestry: EUR
+    phenotype: seronegative rheumatoid arthritis
+    finngen_release: TO_BE_VERIFIED
+    original_paper_doi: https://doi.org/10.1038/s41586-022-05473-8
+    n_cases: 1937
+    n_controls: 172834
+    access_date: '2026-03-18'
+  - name: RA_EAS_BBJ
+    source: opengwas
+    id: bbj-a-151
+    ancestry: EAS
+    phenotype: rheumatoid arthritis
+    original_paper_doi: https://doi.org/10.1038/s41588-021-00931-x
+    n_cases: 4199
+    n_controls: 208254
+    access_date: '2026-03-18'
+sample_overlap:
+  check_required: true
+  method: cross-reference eQTLGen cohort list vs outcome GWAS cohort list
+  eqtlgen_cohort_list_source: Supplementary materials of eQTLGen publication
+  action_if_overlap_detected: report estimated overlap proportion and flag as sensitivity
+    caveat
+  action_if_overlap_unquantifiable: state explicitly in methods and limitation sections
+  metadata_file: configs/sample_overlap_metadata.yaml
+harmonisation:
+  action: 2
+  palindromic_maf_threshold: 0.42
+  record_palindromic_loss: true
+  use_mr_keep_as_final_usable_indicator: true
+mr_estimation:
+  rule_based_method_selection: true
+  primary_estimator:
+    single_snp: mr_wald_ratio
+    multi_snp: mr_ivw
+  sensitivity_estimators:
+  - mr_weighted_median
+  - mr_egger_regression
+  method_rules:
+    single_snp:
+      allowed_methods:
+      - mr_wald_ratio
+    two_snp:
+      allowed_methods:
+      - mr_ivw
+      note: Interpret with caution.
+    three_or_more_snp:
+      allowed_methods:
+      - mr_ivw
+      - mr_weighted_median
+      - mr_egger_regression
+    mr_egger:
+      minimum_nsnp: 3
+      reporting_role: sensitivity_only
+  optional_sensitivity:
+    mr_presso:
+      enabled_when_nsnp_usable_ge: 4
+    steiger_filtering:
+      enabled: false
+      note: Exploratory only; not a core benchmark decision rule in the primary protocol.
+assumption_framework:
+  iv1_relevance:
+    enabled: true
+    required_outputs:
+    - raw_variant_count
+    - post_p_threshold_count
+    - post_clump_count
+    - post_outcome_extraction_count
+    - post_harmonisation_row_count
+    - post_harmonisation_usable_count
+    - instrument_strength_summary
+    - approximate_f_statistic_summary
+    relevance_rule: 'Instrument relevance will be summarised using approximate per-variant
+      F statistics derived from beta and standard error, alongside post-threshold
+      and post-clumping SNP counts.
+
+      '
+  iv2_independence:
+    enabled: true
+    required_notes:
+    - cis_only_design_rationale
+    - ancestry_matching_note
+    - population_structure_limitation_note
+  iv3_exclusion_restriction:
+    enabled: true
+    required_outputs:
+    - heterogeneity_when_applicable
+    - egger_intercept_when_applicable
+    - leave_one_out_when_applicable
+    - single_variant_dominance_check
+    - colocalisation_support
+    - cochran_q_when_applicable
+    - cochran_q_pval_when_applicable
+    - i2_gx_when_egger_applicable
+    - susie_followup_status_when_applicable
+    - susie_trigger_log_when_extended_coloc_enabled
+  iv4_target_perturbation_equivalence:
+    enabled: true
+    required_notes:
+    - ligand_vs_receptor_annotation
+    - transcript_vs_protein_proxy_note
+    - tissue_context_note
+    - pharmacologic_directionality_note
+sensitivity_analysis:
+  threshold_sensitivity: true
+  estimator_sensitivity: true
+  cross_dataset_replication: true
+  serostatus_heterogeneity: true
+  ancestry_transportability: true
+  pQTL_validation: true
+  colocalisation_support: true
+colocalisation:
+  enabled: true
+  role: locus_level_support
+  first_pass_method: coloc_abf
+  follow_up_method: coloc_susie
+  region_definition:
+    default_mode: cis_region_or_gene_plus_minus_500kb
+    complex_ld_region_caution: true
+  priors:
+    p1: 0.0001
+    p2: 0.0001
+    p12: 1.0e-05
+  strong_support_threshold:
+    pp_h4_ge: 0.8
+  priority_targets:
+  - tnf
+  - lta
+  - fcgr1a
+  - fcgr2a
+  - fcgr2b
+  - fcgr2c
+  - fcgr3a
+  - fcgr3b
+  - cd80
+  - cd86
+  - ctla4
+  - ms4a1
+  - il6r
+  - il1r1
+  - jak1
+  - jak2
+  - jak3
+  - tyk2
+  coloc_outcome_scope:
+    core_outcomes:
+      - RA_EUR_PRIMARY
+    supplementary_outcomes:
+      - RA_EUR_REP1_FinnGen
+    excluded_from_coloc:
+      - RA_EUR_SEROPOS    # FinnGen seropos: limited contribution to classification
+      - RA_EUR_SERONEG    # n_case=1,937: insufficient power for coloc
+      - RA_EAS_BBJ        # cross-ancestry LD mismatch (EUR eQTL vs EAS GWAS)
+  complex_region_notes:
+  - TNF/LTA and nearby MHC-proximal structures require cautious interpretation.
+  note: 'Colocalisation is used as a supporting interpretability axis rather than
+    a replacement for MR estimation. coloc.abf is used for first-pass analysis; coloc.susie
+    is reserved for loci where multiple causal variants are plausible.
+
+    '
+  susie_follow_up:
+    enabled: true
+    run_when_allowed_by_run_profile: true
+    minimum_overlap_snps: 50
+    minimum_ld_snps: 20
+    trigger_rules:
+      shared_locus_or_cluster_region: true
+      complex_ld_region: true
+      abf_inconclusive_but_mr_supportive: true
+  ld_matrix:
+    required_for_follow_up_method: true
+    source_priority:
+    - local_plink
+    local_plink:
+      enabled: true
+      plink_bin: ${PLINK_BIN}               # e.g. tools/plink1.9/plink or system path
+      reference_bfiles:
+        EUR: ${LD_REF_EUR}                   # e.g. resources/ld/1kg.v3/EUR (.bed/.bim/.fam prefix)
+        EAS: ${LD_REF_EAS}                   # e.g. resources/ld/1kg.v3/EAS (.bed/.bim/.fam prefix)
+      note: Local-only LD backend for coloc.susie. Set PLINK_BIN, LD_REF_EUR, and
+        LD_REF_EAS environment variables (or edit directly) before enabling manuscript runs.
+non_estimable_definition:
+  categories:
+  - no_variant_after_target_filter
+  - no_variant_after_p_threshold
+  - no_variant_after_clumping
+  - no_variant_after_outcome_extraction
+  - no_usable_variant_after_harmonisation
+  - insufficient_variant_count_for_estimator
+  treat_as_negative_evidence: false
+benchmark_classification:
+  classes:
+  - Strong
+  - Weak_or_partial
+  - Not_supported
+  - Non_estimable
+  dimensions:
+  - primary_signal
+  - replication_direction
+  - replication_support
+  - serostatus_consistency
+  - ancestry_transportability
+  - pQTL_support
+  - colocalisation_support
+  - alignment_certainty
+  support_subtypes:
+  - 'null'
+  - inverse
+  decision_matrix:
+    Strong:
+      primary_signal_criterion: nominal_p < 0.05 AND direction concordant with expected_protective_direction_if_aligned
+        when alignment is not classified as complex
+      replication_criterion: directionally concordant in >= 1 replication dataset
+    Weak_or_partial:
+      summary: 'Primary estimate is supportive, but replication or robustness layers
+        are incomplete, inconsistent, or only partially concordant.
+
+        '
+    Not_supported:
+      summary: 'An estimable MR result is available, but the overall evidence does
+        not support the expected benchmark pattern. Subtype ''null'' refers to lack
+        of supportive signal; subtype ''inverse'' refers to direction opposite to
+        the expected pharmacologic pattern.
+
+        '
+    Non_estimable:
+      summary: 'No interpretable MR estimate is produced because the target fails
+        at one or more predefined attrition stages..
+
+        '
+  alignment_rule:
+    use_alignment_certainty_as_modifier_not_hard_override: true
+    note: 'Low alignment certainty does not automatically downgrade a target from
+      Strong to Weak. Instead, alignment certainty modifies interpretation and reporting
+      caution.
+
+      '
+reporting:
+  save_attrition_table: true
+  save_non_estimable_table: true
+  save_main_mr_results: true
+  save_sensitivity_outputs: true
+  save_benchmark_classification: true
+  save_run_manifest: true
+  save_session_info: true
+  save_protocol_snapshot: true
+  save_pipeline_log: true
+  save_pipeline_errors: true
+  save_susie_followup_summary: true
+  save_susie_trigger_log: true
+  save_ld_matrix_provenance: true
+environment:
+  require_opengwas_jwt: true
+  preserve_Renviron: true
+triangulation_framework:
+  implementation_target: master_benchmark_table.csv
+  estimability_states:
+  - estimable
+  - non_estimable
+  - source_unavailable
+  - not_applicable
+  state_vs_flag_rule: technical_caution should be represented as a flag rather than
+    as a mutually exclusive state.
+  replication_types:
+  - outcome_replication
+  - proxy_replication
+  - cross_source_robustness
+  - strong_triangulation
+  concordance_definition:
+    interpretable_equals: estimable
+    primary_rule: same_direction_when_both_estimable
+  discordance_types:
+    Type1: eqtl_positive_with_pqtl_non_estimable_or_source_unavailable
+    Type2: eqtl_and_pqtl_estimable_but_opposite_direction
+    Type3: ukbppp_and_decode_estimable_but_opposite_direction
+    Type4: eqtl_null_or_nonsignificant_with_pqtl_positive
+  special_reporting_flags:
+    technical_caution_as_flag: true
+    locus_caution_flag_required: true
+    manual_review_required_flag: true
+failure_mode_diagnostic:
+  enabled: true
+  role: post_mr_biological_annotation
+  config_file: configs/failure_mode_diagnostic.yaml
+  config_file_previous: configs/failure_mode_diagnostic_v1.yaml  # retained for reference
+  description: >
+    Post-MR mechanistic failure mode classifier (v2). 7-category architecture
+    aligned with research proposal Table 1: (1) MHC/LD complexity, (2) structural
+    variants, (3) pQTL panel absence, (4) tissue/cell-type specificity,
+    (5) mechanism mismatch, (6) post-transcriptional regulation, (7) IV absence.
+    Fetch layer + category layer design for efficient shared DB queries.
+  output_integration:
+    join_key: gene
+    target_table: master_benchmark_table.csv
+    output_prefix: fail_diagnostic_

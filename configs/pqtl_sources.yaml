@@ -1,0 +1,101 @@
+version: template_v2
+default_proxy_type: cis_pQTL
+analysis_scope:
+  main_pqtl_ancestry_scope: EUR_only
+  eas_extension_status: optional_exploratory_extension_not_required
+  combined_source_status: excluded_from_main_analysis
+  interval_status: excluded
+  source_strategy: minimum_one_large_source_preferred_two_sources
+  minimum_required_source_ids:
+    - UKB_PPP_EUR
+  preferred_source_ids:
+    - UKB_PPP_EUR
+    - deCODE_EUR
+  notes:
+    - The core pQTL validation layer is restricted to European-ancestry plasma pQTL resources.
+    - East Asian pQTL is not required for the main manuscript analysis and remains an optional exploratory extension.
+    - Combined-ancestry pQTL sources are excluded from the main analysis because the benchmark framework prioritises ancestry-matched interpretation.
+    - INTERVAL is excluded from the current protocol scope.
+
+sources:
+  - source_name: UK Biobank Pharma Proteomics Project (European discovery)
+    source_id: UKB_PPP_EUR
+    enabled: true
+    file: ${PQTL_DATA_DIR}/ukb_ppp_targets18.tsv
+    delimiter: "\t"
+    ancestry: EUR
+    sample_size: 54219
+    protein_context: plasma
+    source_role: primary_pqtl_source
+    protocol_status: planned_main_analysis
+    outcome_scope:
+      - primary
+      - replication
+      - seropos
+      - seroneg
+    notes:
+      - Core pQTL source for the main benchmark analysis.
+      - This source is sufficient for minimum implementation of the pQTL layer once curated target-level files are available.
+    colmap:
+      gene: gene
+      snp: SNP
+      beta: beta
+      se: se
+      pval: pval
+      eaf: eaf
+      chr: chr
+      pos: pos
+      effect_allele: effect_allele
+      other_allele: other_allele
+
+  - source_name: deCODE plasma proteome (European ancestry)
+    source_id: deCODE_EUR
+    enabled: true
+    file: ${PQTL_DATA_DIR}/decode_main_clumped_mr_ready.tsv.gz
+    delimiter: "\t"
+    ancestry: EUR
+    sample_size: 35559
+    protein_context: plasma
+    source_role: preferred_secondary_pqtl_source
+    protocol_status: planned_main_analysis
+    outcome_scope:
+      - primary
+      - replication
+      - seropos
+      - seroneg
+    notes:
+      - Preferred second pQTL source for source-level robustness assessment.
+      - Uses the MR-ready deCODE main exposure file generated from the deCODE pipeline.
+    colmap:
+      gene: gene
+      snp: SNP
+      beta: beta
+      se: se
+      pval: pval
+      eaf: eaf
+      chr: chr_name
+      pos: chrom_start
+      effect_allele: effect_allele
+      other_allele: other_allele
+
+  - source_name: UK Biobank Pharma Proteomics Project (East Asian)
+    source_id: UKB_PPP_EAS
+    enabled: false
+    ancestry: EAS
+    protein_context: plasma
+    source_role: optional_extension_only
+    protocol_status: not_required_for_main_analysis
+    notes:
+      - Optional exploratory extension only.
+      - Not part of the core manuscript analysis at the current protocol stage.
+
+  - source_name: UK Biobank Pharma Proteomics Project (Combined ancestries)
+    source_id: UKB_PPP_COMBINED
+    enabled: false
+    ancestry: MULTI
+    protein_context: plasma
+    source_role: excluded_from_main_analysis
+    protocol_status: excluded
+    notes:
+      - Excluded from the main benchmark analysis.
+      - The current benchmark framework prioritises ancestry-specific interpretation.

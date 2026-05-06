@@ -76,13 +76,10 @@ write_csv_safe <- function(df, path) {
   invisible(path)
 }
 
-failmode_log <- function(log_file, msg) {
-  msg_eval <- glue::glue(msg, .envir = parent.frame())
-  cat(
-    sprintf("[%s] %s\n", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), msg_eval),
-    file   = log_file %||% "",
-    append = TRUE
-  )
+failmode_log <- function(log_file, msg, ...) {
+  if (!is.null(log_file) && is.character(log_file)) {
+    cat(sprintf(msg, ...), file = log_file, append = TRUE)
+  }
 }
 
 
@@ -1839,12 +1836,13 @@ fetch_aries_mqtl <- function(gene_symbol, aries_data, pval_threshold = 1e-5) {
     top_cpg     = if (n_hits > 0L) hits$cpg[which.min(hits$pval)]  else NA_character_,
     top_p       = if (n_hits > 0L) min(hits$pval, na.rm = TRUE)    else NA_real_,
     source      = "aries_mrinstruments",
-    note        = paste0("ARIES blood mQTL (MRInstruments v",
-                         packageVersion("MRInstruments"), "); ",
-                         "5 timepoints Birth-adolescence; ",
+    note        = paste0(
+        "ARIES blood mQTL (MRInstruments v",
+        packageVersion("MRInstruments"),
+        "); 5 timepoints (Birth-adolescence)"
+    )
   )
 }
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FETCH GROUP D: MULTI-OMICS QTL

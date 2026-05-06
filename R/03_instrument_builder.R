@@ -18,12 +18,20 @@ apply_p_threshold <- function(gdat, p_threshold) {
 }
 
 run_ld_clumping <- function(exp_dat, protocol_cfg, ancestry) {
+
+  ref_bfile <- ifelse(
+    toupper(ancestry) == "EAS",
+    Sys.getenv("LD_REF_EAS"),
+    Sys.getenv("LD_REF_EUR")
+  )
+
   TwoSampleMR::clump_data(
     exp_dat,
     clump_r2 = protocol_cfg$instrument_selection$clumping$r2,
     clump_kb = protocol_cfg$instrument_selection$clumping$kb,
     clump_p1 = protocol_cfg$instrument_selection$p_threshold$primary,
-    pop = ancestry
+    bfile = ref_bfile,
+    plink_bin = Sys.getenv("PLINK_BIN")
   )
 }
 

@@ -1,0 +1,99 @@
+version: "v2_multi_exposure"
+prepared_on: "2026-03-27"
+default_exposure_id: "EQTLGEN_BLOOD"
+notes:
+  - "This file extends the original single-exposure overlap metadata to support both the primary eQTL exposure and secondary pQTL exposures."
+  - "UKB_PPP_EUR is the key addition for direct population-overlap screening against RA outcomes."
+  - "RA_EUR_PRIMARY cohort composition is treated as an inference from the source publication plus OpenGWAS ancestry metadata, because the consulted dataset page does not enumerate cohort rosters directly."
+  - "Before manuscript lock, exact cohort roster strings should be pinned to the final source publications or supplementary tables where available."
+
+alias_map:
+  ukb: "UK Biobank"
+  uk biobank: "UK Biobank"
+  ukb-ppp: "UK Biobank"
+  uk biobank pharma proteomics project: "UK Biobank"
+  finngen consortium: "FinnGen"
+  fg: "FinnGen"
+  bbj: "BioBank Japan"
+  biobank japan: "BioBank Japan"
+  japan biobank: "BioBank Japan"
+  eqtlgen: "eQTLGen"
+  decode: "DECODE"
+
+exposures:
+  EQTLGEN_BLOOD:
+    source_name: "eQTLGen whole blood cis-eQTL"
+    source_type: "cis_eQTL"
+    ancestry: "predominantly_EUR"
+    sample_size: 31684
+    cohort_list_status: "incomplete_for_final_lock"
+    cohort_aliases:
+      - "eQTLGen"
+    evidence_note: "The eQTLGen publication states that the consortium meta-analysis used 31,684 blood and PBMC samples from 37 datasets; the exhaustive cohort roster should be transcribed from Supplementary Table 1 before manuscript lock."
+    overlap_interpretation_note: "Current aliases are intentionally conservative and should not be used to claim absence of overlap with certainty."
+
+  UKB_PPP_EUR:
+    source_name: "UK Biobank Pharma Proteomics Project (European discovery)"
+    source_type: "cis_pQTL"
+    ancestry: "EUR"
+    sample_size: 54219
+    cohort_list_status: "sufficient_for_direct_overlap_screen"
+    cohort_aliases:
+      - "UK Biobank"
+    evidence_note: "UKB-PPP profiled 54,219 UK Biobank participants and is therefore a direct UK Biobank-derived exposure source."
+    overlap_interpretation_note: "Any outcome that includes UK Biobank participants should be flagged as possible but unquantified sample overlap."
+
+
+  deCODE_EUR:
+    source_name: "deCODE plasma proteome"
+    source_type: "cis_pQTL"
+    ancestry: "EUR"
+    sample_size: 35559
+    cohort_list_status: "sufficient_for_direct_overlap_screen"
+    cohort_aliases:
+      - "DECODE"
+    evidence_note: "deCODE plasma proteome derives from Icelandic deCODE participants and should be screened as a distinct pQTL exposure source."
+    overlap_interpretation_note: "Outcomes with known or suspected deCODE/Icelandic participant contribution should be flagged as possible but unquantified overlap; otherwise no direct overlap is detected under current metadata."
+
+outcomes:
+  RA_EUR_PRIMARY:
+    source_name: "ebi-a-GCST90018910"
+    ancestry: "EUR"
+    cohort_list_status: "inferred_from_source_publication_and_dataset_metadata"
+    cohort_aliases:
+      - "UK Biobank"
+      - "FinnGen"
+    evidence_note: "The source publication reports trans-biobank meta-analyses with UK Biobank and FinnGen, and the OpenGWAS dataset page labels this specific dataset as European; for overlap screening, UK Biobank and FinnGen are retained as the working cohort aliases."
+    caveat_note: "This is adequate for conservative overlap screening of UKB_PPP_EUR, but the exact contributing-cohort roster and proportions should still be pinned before final manuscript lock."
+
+  RA_EUR_REP1_FinnGen:
+    source_name: "finn-b-M13_RHEUMA"
+    ancestry: "EUR"
+    cohort_list_status: "direct"
+    cohort_aliases:
+      - "FinnGen"
+    evidence_note: "FinnGen endpoint M13_RHEUMA derives from the FinnGen biobank-and-register resource."
+
+  RA_EUR_SEROPOS:
+    source_name: "finn-b-RHEUMA_SEROPOS"
+    ancestry: "EUR"
+    cohort_list_status: "direct"
+    cohort_aliases:
+      - "FinnGen"
+    evidence_note: "FinnGen seropositive rheumatoid arthritis endpoint is a FinnGen-defined endpoint and should be treated as FinnGen-only for overlap screening."
+
+  RA_EUR_SERONEG:
+    source_name: "finn-b-RHEUMA_SERONEG"
+    ancestry: "EUR"
+    cohort_list_status: "direct"
+    cohort_aliases:
+      - "FinnGen"
+    evidence_note: "FinnGen seronegative rheumatoid arthritis endpoint is a FinnGen-defined endpoint and should be treated as FinnGen-only for overlap screening."
+
+  RA_EAS_BBJ:
+    source_name: "bbj-a-151"
+    ancestry: "EAS"
+    cohort_list_status: "direct"
+    cohort_aliases:
+      - "BioBank Japan"
+    evidence_note: "The BBJ rheumatoid arthritis dataset is an East Asian BioBank Japan resource and does not imply UK Biobank participation."

@@ -1,0 +1,256 @@
+version: "v1.0"
+
+tier_definitions:
+  Tier1:
+    label: "clinically established and genetically more tractable positive control"
+  Tier2:
+    label: "clinically established or pathway-relevant but genetically difficult to interpret"
+
+targets:
+  - gene: "tnf"
+    class: "cytokine"
+    target_role: "ligand"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "infliximab"
+      - "adalimumab"
+      - "etanercept"
+      - "golimumab"
+      - "certolizumab pegol"
+    drug_mechanism: "ligand neutralisation / TNF pathway blockade"
+    expected_protective_direction_if_aligned: "lower_target_activity_or_expression"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Lower TNF expression or activity is directionally compatible with TNF inhibition,
+      but blood eQTL may not fully capture pharmacologic ligand neutralisation.
+
+  - gene: "lta"
+    class: "cytokine"
+    target_role: "ligand"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "etanercept"
+    drug_mechanism: "pathway-related cytokine biology, not a standard direct RA drug target"
+    expected_protective_direction_if_aligned: "lower_target_activity_or_expression"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Pathway-relevant target with plausible immune signalling relevance, but direct
+      pharmacologic benchmarking is weaker than for TNF or IL6R.
+
+  - gene: "fcgr1a"
+    class: "fc_receptor"
+    target_role: "receptor"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "etanercept"
+    drug_mechanism: "Fc receptor pathway relevance rather than direct approved target"
+    expected_protective_direction_if_aligned: "context_dependent"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Directionality is difficult because Fc receptor biology may reflect effector-cell
+      composition and immune-complex handling rather than a simple drug-mimetic perturbation.
+
+  - gene: "fcgr2a"
+    class: "fc_receptor"
+    target_role: "receptor"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "etanercept"
+    drug_mechanism: "Fc receptor pathway relevance rather than direct approved target"
+    expected_protective_direction_if_aligned: "context_dependent"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Interpretation should be cautious; transcript variation may reflect cell-state or
+      composition effects rather than a therapeutically targeted perturbation.
+
+  - gene: "fcgr2b"
+    class: "fc_receptor"
+    target_role: "receptor"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "etanercept"
+    drug_mechanism: "Fc receptor pathway relevance rather than direct approved target"
+    expected_protective_direction_if_aligned: "context_dependent"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Inhibitory Fc receptor biology is complex; simple up/down transcript interpretation
+      is unlikely to map cleanly onto a pharmacologic analogue.
+
+  - gene: "fcgr2c"
+    class: "fc_receptor"
+    target_role: "receptor"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "etanercept"
+    drug_mechanism: "Fc receptor pathway relevance rather than direct approved target"
+    expected_protective_direction_if_aligned: "context_dependent"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Treat as a pathway-level benchmark target rather than a clean direct positive control.
+
+  - gene: "fcgr3a"
+    class: "fc_receptor"
+    target_role: "receptor"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "etanercept"
+    drug_mechanism: "Fc receptor pathway relevance rather than direct approved target"
+    expected_protective_direction_if_aligned: "context_dependent"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Direction may be influenced by innate effector-cell abundance and receptor-mediated
+      cytotoxic biology rather than direct target blockade.
+
+  - gene: "fcgr3b"
+    class: "fc_receptor"
+    target_role: "receptor"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "etanercept"
+    drug_mechanism: "Fc receptor pathway relevance rather than direct approved target"
+    expected_protective_direction_if_aligned: "context_dependent"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Particularly vulnerable to cell-composition interpretation issues in whole-blood eQTL.
+
+  - gene: "cd80"
+    class: "costimulatory_ligand"
+    target_role: "ligand"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "abatacept"
+    drug_mechanism: "costimulation blockade via CTLA4-Ig binding to CD80/CD86"
+    expected_protective_direction_if_aligned: "lower_target_availability_or_costimulation"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Lower CD80-mediated costimulation is directionally compatible with abatacept pathway
+      biology, but transcript abundance does not perfectly proxy ligand engagement.
+
+  - gene: "cd86"
+    class: "costimulatory_ligand"
+    target_role: "ligand"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "abatacept"
+    drug_mechanism: "costimulation blockade via CTLA4-Ig binding to CD80/CD86"
+    expected_protective_direction_if_aligned: "lower_target_availability_or_costimulation"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Similar interpretive logic to CD80; pathway alignment is plausible but not exact.
+
+  - gene: "ctla4"
+    class: "costimulatory_receptor"
+    target_role: "receptor"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "abatacept"
+    drug_mechanism: "CTLA4-Ig fusion protein mimicking inhibitory costimulatory signalling"
+    expected_protective_direction_if_aligned: "higher_inhibitory_signalling"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Increased CTLA4-related inhibitory tone may align with protection, but endogenous CTLA4
+      expression is not identical to exposure to abatacept.
+
+  - gene: "ms4a1"
+    class: "b_cell_surface_marker"
+    target_role: "surface_marker"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "rituximab"
+    drug_mechanism: "B-cell depletion targeting CD20/MS4A1"
+    expected_protective_direction_if_aligned: "lower_target_cell_abundance_or_target_presence"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Lower MS4A1-related signal may align with B-cell depletion biology, but expression can
+      also reflect B-cell abundance rather than direct target perturbation.
+
+  - gene: "il6r"
+    class: "cytokine_receptor"
+    target_role: "receptor"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "tocilizumab"
+      - "sarilumab"
+    drug_mechanism: "IL-6 receptor blockade"
+    expected_protective_direction_if_aligned: "complex"
+    alignment_certainty: "low"
+    interpretability_note: >
+      Receptor blockade is not equivalent to simple transcript up/down regulation, and the
+      distinction between membrane-bound and soluble IL6R makes alignment particularly complex.
+
+  - gene: "il1r1"
+    class: "cytokine_receptor"
+    target_role: "receptor"
+    tier: "Tier2"
+    direct_ra_target: true
+    drug_examples:
+      - "anakinra"
+    drug_mechanism: "IL-1 receptor antagonism"
+    expected_protective_direction_if_aligned: "lower_signalling"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Pathway direction is plausible, but historical RA use and current benchmarking strength
+      are weaker than for TNF, IL6R, or CTLA4-pathway targets.
+
+  - gene: "jak1"
+    class: "intracellular_kinase"
+    target_role: "intracellular"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "upadacitinib"
+      - "filgotinib"
+      - "tofacitinib"
+    drug_mechanism: "JAK inhibition"
+    expected_protective_direction_if_aligned: "lower_target_activity_or_expression"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Reduced JAK1-related signalling is broadly compatible with pharmacologic inhibition,
+      although kinase activity inhibition is not identical to lower transcript abundance.
+
+  - gene: "jak2"
+    class: "intracellular_kinase"
+    target_role: "intracellular"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "baricitinib"
+      - "tofacitinib"
+    drug_mechanism: "JAK inhibition"
+    expected_protective_direction_if_aligned: "lower_target_activity_or_expression"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Similar to JAK1, but transcript change is still only an imperfect proxy for
+      pharmacologic kinase inhibition.
+
+  - gene: "jak3"
+    class: "intracellular_kinase"
+    target_role: "intracellular"
+    tier: "Tier1"
+    direct_ra_target: true
+    drug_examples:
+      - "tofacitinib"
+    drug_mechanism: "JAK inhibition"
+    expected_protective_direction_if_aligned: "lower_target_activity_or_expression"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Alignment is plausible at pathway level, but not identical to selective catalytic inhibition.
+
+  - gene: "tyk2"
+    class: "intracellular_kinase"
+    target_role: "intracellular"
+    tier: "Tier2"
+    direct_ra_target: false
+    drug_examples: "deucravacitinib"
+    drug_mechanism: "pathway-relevant kinase inhibition biology"
+    expected_protective_direction_if_aligned: "lower_target_activity_or_expression"
+    alignment_certainty: "moderate"
+    interpretability_note: >
+      Strong mechanistic plausibility within cytokine signalling pathways, but not a standard
+      approved direct RA target; treat as pathway-positive rather than classic direct-control target.
