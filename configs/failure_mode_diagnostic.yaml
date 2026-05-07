@@ -998,6 +998,7 @@ alternative_strategy:
     SPLICING_QTL_DETECTED:
       strategy: "Splicing QTL MR (sQTL-MR)"
       instrument_source: "eQTL Catalogue sQTL | GTEx sQTL"
+    ALTERNATIVE_QTL_DETECTED:
       strategy: "xQTL-MR (mQTL, hQTL, caQTL)"
       instrument_source: "GoDMC, QTLbase2, BLUEPRINT"
     POST_TRANSCRIPTIONAL_MISMATCH:
