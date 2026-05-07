@@ -980,13 +980,13 @@ build_fail_mode_composite <- function(cat_results, diag_cfg) {
 
   out_cols <- diag_cfg$output$composite_table_columns %||%
     c("gene", "class",
-      "cat7_flag", "cat7_confidence",
-      "cat3_flag", "cat3_confidence",
       "cat1_flag", "cat1_confidence",
       "cat2_flag", "cat2_confidence", "cat2_locus_score",
-      "cat5_flag", "cat5_confidence",
+      "cat3_flag", "cat3_confidence",
       "cat4_flag", "cat4_confidence",
+      "cat5_flag", "cat5_confidence",
       "cat6_flag", "cat6_confidence",
+      "cat7_flag", "cat7_confidence",
       "n_categories_flagged", "recommended_strategy", "annotation_timestamp")
 
   base_cols <- c("gene", "class", "cat7_flag", "cat7_confidence",
