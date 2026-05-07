@@ -206,10 +206,13 @@ query_sqtl_eqtl_catalogue <- function(target_genes, cache_dir, delay_ms = 500) {
 # ─────────────────────────────────────────────────────────────────────────────
 
 load_aries_mqtl <- function(results_dir, cache_dir) {
+  # Tier 1: CSV in results_dir (run-specific output)
   csv_path <- file.path(results_dir, "aries_mqtl_17genes.csv")
   if (!file.exists(csv_path)) {
     cat6_log("aries_mqtl_17genes.csv not found in results_dir, checking cache/")
-    csv_path <- NULL
+    # Tier 2: pre-extracted CSV in cache/ root (committed to repo; no MRInstruments needed)
+    cache_csv <- file.path(cache_dir, "aries_mqtl_17genes.csv")
+    csv_path <- if (file.exists(cache_csv)) cache_csv else NULL
   }
 
   if (!is.null(csv_path)) {

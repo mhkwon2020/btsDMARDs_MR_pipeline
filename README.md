@@ -22,9 +22,9 @@ The pipeline is **protocol-driven, pre-specified, and designed for publication-g
 ### 1. Prerequisites
 
 - R ≥ 4.0
-- PLINK 1.9 ([download](https://www.cog-genomics.org/plink/))
-- OpenGWAS API JWT token ([obtain here](https://api.opengwas.io/))
-- External data files (see [External Data](#external-data-configuration))
+- PLINK 1.9 ([download](https://www.cog-genomics.org/plink/)) — optional if using pre-clumped instruments (see [LD Clumping](#ld-clumping))
+- OpenGWAS JWT token — **required** for outcome data access (see [OpenGWAS API Token](#opengwas-api-token))
+- External data files (see [External Data Configuration](#external-data-configuration))
 
 ### 2. Set up environment variables
 
@@ -45,7 +45,7 @@ PQTL_DATA_DIR=/path/to/pqtl
 OPENGWAS_JWT=<your_token>
 ```
 
-> **Note:** `.Renviron` is listed in `.gitignore` and will never be committed.
+> **Note:** `.Renviron` is listed in `.gitignore` and will never be committed to version control.
 
 ### 3. Run the pipeline
 
@@ -65,12 +65,48 @@ source("main_fullstudy.R")
 
 ---
 
-## LD Clumping — Running Without PLINK
+## OpenGWAS API Token
+
+The pipeline queries the [OpenGWAS platform](https://gwas.mrcieu.ac.uk/) for outcome GWAS summary statistics and for the failure mode diagnostic API fetch layer. Both require a **free JWT authentication token**, obtainable from [https://api.opengwas.io/](https://api.opengwas.io/).
+
+The `OPENGWAS_JWT` environment variable is used by `04_outcome_harmonise.R` (outcome data extraction) and `15_failure_mode_diagnostic.R` (external API annotation for diagnostic categories 2, 4, and 6). The token must be set in `.Renviron` before running the pipeline.
+
+> **For collaborators:** Each user must obtain and configure their own JWT token. Tokens are personal credentials and must **never** be committed to version control or shared in any configuration file.
+
+---
+
+## LD Clumping
 
 Pre-clumped instrument files for all 18 targets are included in `cache/clumped_instruments/`.  
 The pipeline checks this cache before calling PLINK, so **PLINK is not required** if you are reproducing the exact analysis with the same protocol parameters (p = 5×10⁻⁸, r² = 0.001, kb = 10,000, EUR ancestry).
 
 If you change these parameters or add new targets, PLINK and the 1000G LD reference panels will be needed.
+
+---
+
+## Pre-extracted ARIES mQTL Data
+
+A pre-extracted ARIES mQTL dataset for all 18 drug targets is included in `cache/aries_mqtl_17genes.csv`.  
+This file was extracted from the `MRInstruments` R package (`MRInstruments::aries_mqtl`) and filtered to the 18 target genes. It is used by the Category 6 (post-transcriptional discordance) failure mode diagnostic.
+
+The pipeline (`R/16_failure_mode_cat6.R`) searches for ARIES data in the following order:
+1. `<run_dir>/results/aries_mqtl_17genes.csv` — run-specific output (if present)
+2. `cache/aries_mqtl_17genes.csv` — pre-extracted file included in this repository
+3. Per-gene `.rds` files in `cache/failmode_api/` — generated at runtime if API fetch is enabled
+
+Because the pre-extracted CSV is committed to the repository, **the `MRInstruments` package is not required** for standard reproduction.  
+If you need to regenerate the CSV (e.g., for an updated target list), install and run:
+
+```r
+remotes::install_github("MRCIEU/MRInstruments")
+library(MRInstruments)
+data(aries_mqtl)
+targets_upper <- toupper(c("tnf","lta","fcgr1a","fcgr2a","fcgr2b","fcgr2c",
+                            "fcgr3a","fcgr3b","cd80","cd86","ctla4","ms4a1",
+                            "il6r","il1r1","jak1","jak2","jak3","tyk2"))
+aries_sub <- aries_mqtl[aries_mqtl$gene %in% targets_upper, ]
+write.csv(aries_sub, "cache/aries_mqtl_17genes.csv", row.names = FALSE)
+```
 
 ---
 
@@ -162,6 +198,9 @@ project_root/
   cache/
     clumped_instruments/          # Pre-clumped instruments (EUR, p=5e-8)
                                   # Allows running without PLINK
+    aries_mqtl_17genes.csv        # Pre-extracted ARIES mQTL for 18 targets
+                                  # Allows Category 6 analysis without MRInstruments
+    failmode_api/                 # Per-gene API fetch cache (gitignored; runtime-generated)
 
   runs/
     <timestamp>/                  # Auto-generated per run
@@ -184,7 +223,7 @@ Paths are resolved at runtime via environment variables (see `.Renviron.example`
 | `LD_REF_EUR` | 1000G EUR PLINK bfile prefix (`.bed/.bim/.fam`) |
 | `LD_REF_EAS` | 1000G EAS PLINK bfile prefix |
 | `PLINK_BIN` | Path to PLINK 1.9 binary |
-| `OPENGWAS_JWT` | JWT token for OpenGWAS API |
+| `OPENGWAS_JWT` | JWT token for OpenGWAS API (see [OpenGWAS API Token](#opengwas-api-token)) |
 
 ### Required pQTL files
 
@@ -245,36 +284,48 @@ runs/
 
 ## Failure Mode Diagnostic Framework
 
-The pipeline includes a structured post-MR diagnostic system:
+The pipeline includes a structured post-MR diagnostic system that systematically attributes null or discordant MR findings to specific methodological sources. Seven non-mutually exclusive diagnostic categories are evaluated for all *Not supported* and *Non-estimable* targets:
 
-- **Category 7:** Instrument absence (IV failure cascade)
-- **Category 6:** Post-transcriptional discordance
-- **Category 5:** Mechanism mismatch
-- **Category 4:** Tissue/cell-type specificity
-- **Category 3:** pQTL panel absence
-- **Category 1–2:** LD structure / genomic complexity
+| Category | Domain |
+|---|---|
+| Category 1 | MHC/LD complexity |
+| Category 2 | Structural variant / genomic cluster / paralog |
+| Category 3 | pQTL panel absence |
+| Category 4 | Tissue/cell-type specificity |
+| Category 5 | Pharmacological mechanism mismatch |
+| Category 6 | Post-transcriptional discordance (sQTL / eQTL–pQTL) |
+| Category 7 | Instrument absence / statistical non-recovery |
 
-This framework enables **systematic interpretation of null or discordant MR findings**.
+Diagnostic flags are additive and confidence-tiered (High / Moderate / Low). They annotate each target without altering the primary benchmark classification.
+
+Full category definitions, data sources, and decision rules are specified in `configs/failure_mode_diagnostic.yaml` and implemented in `R/15_failure_mode_diagnostic.R` and `R/16_failure_mode_cat6.R`.
 
 ---
 
 ## Dependencies
 
 ```r
-install.packages(c("dplyr", "yaml", "fs", "glue", "ggplot2", "data.table", "coloc"))
+install.packages(c(
+  "dplyr", "tidyr", "yaml", "fs", "glue",
+  "ggplot2", "data.table", "coloc", "susieR"
+))
+
 # TwoSampleMR from GitHub:
 remotes::install_github("MRCIEU/TwoSampleMR")
 ```
 
-| Package | Role |
-|---|---|
-| TwoSampleMR | Instrument formatting, harmonisation, MR estimation |
-| coloc | Colocalisation analysis |
-| dplyr | Data wrangling |
-| yaml | Config file parsing |
-| fs | File system utilities |
-| ggplot2 | Figures |
-| data.table | Sample overlap checks |
+| Package | Version (used) | Role |
+|---|---|---|
+| TwoSampleMR | 0.7.0 | Instrument formatting, harmonisation, MR estimation |
+| coloc | 5.2.3 | Colocalisation analysis |
+| susieR | 0.14.2 | SuSiE fine-mapping (triggered by protocol rules) |
+| dplyr / tidyr | — | Data wrangling |
+| yaml | — | Config file parsing |
+| fs | — | File system utilities |
+| glue | — | String interpolation in logging |
+| ggplot2 | — | Figures |
+| data.table | — | Sample overlap checks, large-file reading |
+| MRInstruments | — | ARIES mQTL source data (**optional** — pre-extracted CSV included in `cache/`) |
 
 ---
 
@@ -296,7 +347,11 @@ Mihye Kwon
 
 ## Citation
 
-(To be added upon publication)
+If you use this pipeline, please cite:
+
+> Kwon M et al. (2026). btsDMARDs MR Pipeline (Version 1). Zenodo. https://doi.org/10.5281/zenodo.20051419
+
+Manuscript citation to be added upon publication.
 
 ---
 
